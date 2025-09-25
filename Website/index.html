@@ -14,8 +14,8 @@
       }
 
       header {
-        background: #0d6efd;
-        color: white;
+        background: #e2e2e2;
+        color: rgb(0, 0, 0);
         padding: 1rem;
         text-align: center;
       }
@@ -115,8 +115,24 @@
   </head>
   <body>
     <header>
-      <h1>Signature Complexity Analyzer</h1>
-      <p>Upload a signature to evaluate its complexity</p>
+      <div
+        style="
+          display: flex;
+          align-items: left;
+          justify-content: left;
+          gap: 5rem;
+        "
+      >
+        <img
+          src="Images/BTKLogo.png"
+          alt="BTK Studios Logo"
+          style="height: 150px"
+        />
+        <div>
+          <h1>Signature Complexity Analyzer</h1>
+          <p>Upload a signature to evaluate its complexity</p>
+        </div>
+      </div>
     </header>
 
     <main>
@@ -137,6 +153,13 @@
           </div>
           <p class="error-message" id="errorMsg"></p>
           <button type="submit" style="margin-top: 1rem">Analyze</button>
+          <button
+            type="button"
+            id="clearBtn"
+            style="margin-top: 1rem; margin-left: 0.5rem"
+          >
+            Clear Results
+          </button>
         </form>
       </section>
 
@@ -217,6 +240,16 @@
         document.getElementById("penIntersections").textContent = "5";
 
         results.style.display = "block";
+
+        // Clear results button logic
+        document
+          .getElementById("clearBtn")
+          .addEventListener("click", function () {
+            input.value = "";
+            previewBox.style.display = "none";
+            errorMsg.textContent = "";
+            results.style.display = "none";
+          });
       });
     </script>
   </body>
