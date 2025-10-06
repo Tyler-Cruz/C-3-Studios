@@ -1,16 +1,16 @@
 /* ========== Base Styles ========== */
 body {
   font-family: Arial, sans-serif;
-  background: #f8f9fa;
+  background: #151515;
   margin: 0;
   padding: 0;
-  color: #333;
+  color: #ffffff;
 }
 
 /* ========== Header ========== */
 header {
-  background: #e2e2e2;
-  color: #000;
+  background: #101010;
+  color: #ffffff;
   padding: 1rem;
 }
 
@@ -32,7 +32,7 @@ header {
   gap: 2rem;
   max-width: 1100px;
   margin: 2rem auto;
-  background: white;
+  background: #432420a4;
   padding: 2rem;
   border-radius: 12px;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
@@ -43,10 +43,10 @@ h2 {
   margin-top: 1.5rem;
   color: #0d6efd;
 }
-
+/*c83c32
 /* ========== Upload Section (Left) ========== */
 .upload-section {
-  border: 2px dashed #0d6efd;
+  border: 2px dashed #ffffff;
   padding: 2rem;
   text-align: center;
   border-radius: 12px;
@@ -60,7 +60,7 @@ input[type="file"] {
 }
 
 .upload-btn {
-  background: #0d6efd;
+  background: #198754;
   color: white;
   padding: 0.75rem 1.5rem;
   border-radius: 8px;
@@ -82,14 +82,14 @@ input[type="file"] {
 .preview img {
   max-width: 100%;
   max-height: 200px;
-  border: 1px solid #ccc;
+  border: 1px solid #000000;
   border-radius: 8px;
 }
 
 /* ========== Buttons ========== */
 .analyze-btn,
 .clear-btn {
-  background: #0d6efd;
+  background: #198754;
   color: white;
   padding: 0.75rem 1.25rem;
   border: none;
@@ -100,24 +100,36 @@ input[type="file"] {
 }
 
 .clear-btn {
-  background: #6c757d;
+  background: #198754;
   margin-left: 0.5rem;
 }
 
-.analyze-btn:hover {
-  background: #0b5ed7;
+.analyze-btn:hover:not(:disabled) {
+  background: #115c39;
 }
 
-.analyze-btn:disabled {
-  background: #a0c4ff; /* lighter gray-blue */
+.clear-btn:hover:not(:disabled) {
+  background: #115c39;
+}
+
+.analyze-btn:disabled,
+.clear-btn:disabled {
+  background: #1987545b;
   cursor: not-allowed;
 }
 
-.clear-btn:hover {
-  background: #5a6268;
+/* ========== Progress Bar ========== */
+.progress-label {
+  text-align: center;
+  margin-top: 0.5rem;
+  font-weight: bold;
+  color: #ffffff;
 }
 
-/* ========== Progress Bar ========== */
+.progress-label.complete {
+  color: #ffffff;
+}
+
 .progress-container {
   width: 100%;
   height: 10px;
@@ -130,41 +142,31 @@ input[type="file"] {
 .progress-bar {
   width: 0%;
   height: 100%;
-  background-color: #0d6efd;
+  background-color: #0974df;
   transition: width 0.4s ease, background-color 0.4s ease;
 }
 
 .progress-bar.complete {
-  background-color: #198754; /* green on success */
+  background-color: #198754;
 }
 
-.progress-label {
-  text-align: center;
-  margin-top: 0.5rem;
-  font-weight: bold;
-  color: #0d6efd;
-}
-
-.progress-label.complete {
-  color: #198754; /* green when done */
-}
 /* ========== Results Panel (Right) ========== */
 .results-panel {
-  background: #f1f3f5;
+  background: #432420a4;
   border-radius: 12px;
   padding: 2rem;
   min-height: 400px;
-  border: 2px solid #e0e0e0;
+  border: 2px solid #ffffff;
 }
 
 .results-panel h2 {
-  color: #0d6efd;
+  color: #ffffff;
 }
 
 .results-panel .score {
   font-size: 2rem;
   font-weight: bold;
-  color: #198754;
+  color: #ffffff;
 }
 
 .results-panel .metrics {
@@ -175,7 +177,7 @@ input[type="file"] {
 }
 
 .results-panel .metric {
-  background: white;
+  background: rgb(81, 60, 60);
   padding: 1rem;
   border-radius: 8px;
   text-align: center;
@@ -188,7 +190,7 @@ footer {
   padding: 1rem;
   margin-top: 2rem;
   font-size: 0.9rem;
-  color: #666;
+  color: #ffffff;
 }
 
 /* ========== Responsive Layout ========== */
