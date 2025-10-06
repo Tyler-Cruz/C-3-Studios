@@ -1,7 +1,7 @@
 /* ========== Base Styles ========== */
 body {
   font-family: Arial, sans-serif;
-  background: #151515;
+  background: #251300;
   margin: 0;
   padding: 0;
   color: #ffffff;
@@ -9,7 +9,7 @@ body {
 
 /* ========== Header ========== */
 header {
-  background: #101010;
+  background: #bfa362ea;
   color: #ffffff;
   padding: 1rem;
 }
@@ -23,6 +23,7 @@ header {
 
 .logo {
   height: 100px;
+  filter: brightness(0) invert(1);
 }
 
 /* ========== Main Layout ========== */
@@ -32,10 +33,9 @@ header {
   gap: 2rem;
   max-width: 1100px;
   margin: 2rem auto;
-  background: #432420a4;
+  background: #251300;
   padding: 2rem;
   border-radius: 12px;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
 }
 
 /* Headings */
@@ -46,7 +46,7 @@ h2 {
 /*c83c32
 /* ========== Upload Section (Left) ========== */
 .upload-section {
-  border: 2px dashed #ffffff;
+  border: 2px solid #ffffff;
   padding: 2rem;
   text-align: center;
   border-radius: 12px;
@@ -60,12 +60,16 @@ input[type="file"] {
 }
 
 .upload-btn {
-  background: #198754;
+  background: #349189eb;
   color: white;
   padding: 0.75rem 1.5rem;
   border-radius: 8px;
   cursor: pointer;
   font-weight: bold;
+}
+
+.upload-btn:hover {
+  background: #349189cf;
 }
 
 .error-message {
@@ -89,7 +93,7 @@ input[type="file"] {
 /* ========== Buttons ========== */
 .analyze-btn,
 .clear-btn {
-  background: #198754;
+  background: #349189eb;
   color: white;
   padding: 0.75rem 1.25rem;
   border: none;
@@ -100,21 +104,21 @@ input[type="file"] {
 }
 
 .clear-btn {
-  background: #198754;
+  background: #349189eb;
   margin-left: 0.5rem;
 }
 
 .analyze-btn:hover:not(:disabled) {
-  background: #115c39;
+  background: #349189cf;
 }
 
 .clear-btn:hover:not(:disabled) {
-  background: #115c39;
+  background: #349189cf;
 }
 
 .analyze-btn:disabled,
 .clear-btn:disabled {
-  background: #1987545b;
+  background: #4b4b4be3;
   cursor: not-allowed;
 }
 
@@ -142,7 +146,7 @@ input[type="file"] {
 .progress-bar {
   width: 0%;
   height: 100%;
-  background-color: #0974df;
+  background-color: #006CD1;
   transition: width 0.4s ease, background-color 0.4s ease;
 }
 
@@ -152,7 +156,7 @@ input[type="file"] {
 
 /* ========== Results Panel (Right) ========== */
 .results-panel {
-  background: #432420a4;
+  background: #bfa362ea;
   border-radius: 12px;
   padding: 2rem;
   min-height: 400px;
@@ -177,7 +181,7 @@ input[type="file"] {
 }
 
 .results-panel .metric {
-  background: rgb(81, 60, 60);
+  background: #349189eb;
   padding: 1rem;
   border-radius: 8px;
   text-align: center;
