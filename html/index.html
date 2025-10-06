@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Signature Complexity Analyzer</title>
+    <link rel="stylesheet" href="../css/style.css" />
+  </head>
+  <body>
+    <header>
+      <div class="header-container">
+        <img
+          src="../images/CStudiosLogo.png"
+          alt="C Studios Logo"
+          class="logo"
+        />
+        <div>
+          <h1>Signature Complexity Analyzer</h1>
+          <p>Upload a signature to evaluate its complexity</p>
+        </div>
+      </div>
+    </header>
+
+    <main class="main-layout">
+      <!-- Left: Upload/Analysis Section -->
+      <section class="upload-section">
+        <form id="uploadForm">
+          <input
+            type="file"
+            id="signatureInput"
+            accept="image/png, image/jpeg"
+          />
+          <label for="signatureInput" class="upload-btn"
+            >Choose Signature</label
+          >
+
+          <div class="preview" id="previewBox">
+            <p>Preview:</p>
+            <img id="previewImage" alt="Signature Preview" />
+          </div>
+
+          <p class="error-message" id="errorMsg"></p>
+
+          <div class="button-group">
+            <button class="analyze-btn" id="analyzeBtn">Analyze</button>
+            <button class="clear-btn" id="clearBtn">Clear Results</button>
+          </div>
+
+          <!-- Progress label -->
+          <p id="progressLabel" class="progress-label"></p>
+
+          <!-- Progress bar -->
+          <div class="progress-container">
+            <div class="progress-bar" id="progressBar"></div>
+          </div>
+        </form>
+      </section>
+
+      <!-- Right: Results Panel (always visible) -->
+      <section class="results-panel" id="resultsPanel">
+        <h2>Analysis Results</h2>
+        <p>Overall Complexity Score:</p>
+        <p class="score" id="complexityScore">--</p>
+
+        <div class="metrics">
+          <div class="metric">
+            <h3>Pen Lifts</h3>
+            <p id="penLifts">--</p>
+          </div>
+          <div class="metric">
+            <h3>Pen Reversals</h3>
+            <p id="penReversals">--</p>
+          </div>
+          <div class="metric">
+            <h3>Pen Intersections</h3>
+            <p id="penIntersections">--</p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <p>&copy; C<sup>3</sup> Studios</p>
+    </footer>
+
+    <script>
+      const form = document.getElementById("uploadForm");
+      const input = document.getElementById("signatureInput");
+      const errorMsg = document.getElementById("errorMsg");
+      const results = document.getElementById("resultsSection");
+      const previewBox = document.getElementById("previewBox");
+      const previewImage = document.getElementById("previewImage");
+
+      const analyzeBtn = document.getElementById("analyzeBtn");
+
+      // Disable analyze button by default
+      analyzeBtn.disabled = true;
+
+      // Enable analyze button only when a valid file is selected
+      input.addEventListener("change", function () {
+        errorMsg.textContent = "";
+        const file = this.files[0];
+
+        // Show preview if valid image
+        if (file && ["image/png", "image/jpeg"].includes(file.type)) {
+          const reader = new FileReader();
+          reader.onload = function (e) {
+            previewImage.src = e.target.result;
+            previewBox.style.display = "block";
+          };
+          reader.readAsDataURL(file);
+
+          // Enable Analyze button
+          analyzeBtn.disabled = false;
+        } else {
+          previewBox.style.display = "none";
+          errorMsg.textContent =
+            "Invalid file type. Please upload a PNG or JPEG image.";
+          // Disable Analyze button
+          analyzeBtn.disabled = true;
+        }
+      });
+
+      // Clear button also disables Analyze button
+      document
+        .getElementById("clearBtn")
+        .addEventListener("click", function () {
+          input.value = "";
+          previewBox.style.display = "none";
+          errorMsg.textContent = "";
+
+          // Reset progress bar
+          const progressBar = document.getElementById("progressBar");
+          progressBar.style.width = "0%";
+          progressBar.classList.remove("complete");
+
+          // Reset progress label
+          const progressLabel = document.getElementById("progressLabel");
+          progressLabel.textContent = "";
+          progressLabel.classList.remove("complete");
+
+          // Clear results
+          document.getElementById("complexityScore").textContent = "--";
+          document.getElementById("penLifts").textContent = "--";
+          document.getElementById("penReversals").textContent = "--";
+          document.getElementById("penIntersections").textContent = "--";
+
+          // Disable Analyze button
+          analyzeBtn.disabled = true;
+        });
+
+      function simulateProgress() {
+        const bar = document.getElementById("progressBar");
+        const label = document.getElementById("progressLabel");
+
+        // Disable Analyze button while running
+        analyzeBtn.disabled = true;
+
+        bar.classList.remove("complete"); // reset color
+        label.classList.remove("complete");
+        label.textContent = "Analyzing...";
+        bar.style.width = "0%";
+
+        let width = 0;
+        const interval = setInterval(() => {
+          if (width >= 100) {
+            clearInterval(interval);
+            bar.classList.add("complete"); // turn green
+            label.textContent = "Complete!";
+            label.classList.add("complete");
+
+            // Re-enable Analyze button
+            analyzeBtn.disabled = false;
+          } else {
+            width += 5;
+            bar.style.width = width + "%";
+          }
+        }, 100);
+      }
+
+      // Trigger progress when analyze button is clicked
+      analyzeBtn.addEventListener("click", (e) => {
+        e.preventDefault();
+
+        // Make sure a file is selected
+        if (!input.files.length) {
+          errorMsg.textContent = "Please select a file before analyzing.";
+          return;
+        }
+
+        errorMsg.textContent = "";
+        simulateProgress();
+
+        // Simulate filling in analysis results after delay (replace with real AI logic)
+        setTimeout(() => {
+          document.getElementById("complexityScore").textContent = "78.5";
+          document.getElementById("penLifts").textContent = "3";
+          document.getElementById("penReversals").textContent = "12";
+          document.getElementById("penIntersections").textContent = "5";
+        }, 2200); // slightly longer than progress bar duration
+      });
+
+      document.getElementById("analyzeBtn").addEventListener("click", () => {
+        simulateProgress();
+        // Handle analysis (placeholder)
+        form.addEventListener("submit", function (e) {
+          e.preventDefault();
+          errorMsg.textContent = "";
+
+          if (!input.files.length) {
+            errorMsg.textContent = "Please select a file before analyzing.";
+            return;
+          }
+
+          const file = input.files[0];
+          if (!["image/png", "image/jpeg"].includes(file.type)) {
+            errorMsg.textContent =
+              "Invalid file type. Please upload a PNG or JPEG image.";
+            return;
+          }
+
+          // Placeholder: simulate output
+          document.getElementById("complexityScore").textContent = "78.5";
+          document.getElementById("penLifts").textContent = "3";
+          document.getElementById("penReversals").textContent = "12";
+          document.getElementById("penIntersections").textContent = "5";
+
+          results.style.display = "block";
+        });
+      });
+    </script>
+  </body>
+</html>
