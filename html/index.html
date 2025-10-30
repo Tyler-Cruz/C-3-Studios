@@ -31,11 +31,17 @@
           <img id="previewImage" alt="Signature Preview" />
         </div>
 
+        <!-- Image gallery for uploaded images -->
+        <div class="gallery" id="imageGallery">
+          <!-- Thumbnails will be dynamically inserted here -->
+        </div>
+
         <p class="error-message" id="errorMsg"></p>
 
         <div class="button-group">
           <button class="analyze-btn" id="analyzeBtn">Analyze</button>
           <button class="clear-btn" id="clearBtn">Clear Results</button>
+          <button class="remove-btn" id="removeBtn">Remove From Cache</button>
         </div>
 
         <!-- Progress label and bar -->
@@ -79,31 +85,58 @@
       const previewBox = document.getElementById("previewBox");
       const previewImage = document.getElementById("previewImage");
       const errorMsg = document.getElementById("errorMsg");
+      const gallery = document.getElementById("imageGallery");
+      const removeBtn = document.getElementById("removeBtn");
+      let imagesData = []; // stores { id, file, src, results }
+      let currentImageId = null;
 
       // Initially disable buttons
       analyzeBtn.disabled = true;
       clearBtn.disabled = true;
+      removeBtn.disabled = true;
 
       // Enable Analyze button only when a valid file is selected
+      // Handle multiple file uploads
       input.addEventListener("change", function () {
+        const files = Array.from(this.files);
         errorMsg.textContent = "";
-        const file = this.files[0];
 
-        if (file && ["image/png", "image/jpeg"].includes(file.type)) {
+        files.forEach((file) => {
+          if (!["image/png", "image/jpeg"].includes(file.type)) {
+            errorMsg.textContent =
+              "Invalid file type. Please upload PNG or JPEG images.";
+            return;
+          }
+
           const reader = new FileReader();
           reader.onload = function (e) {
-            previewImage.src = e.target.result;
+            const imgId = Date.now() + Math.random(); // unique ID
+            const imgSrc = e.target.result;
+
+            imagesData.push({
+              id: imgId,
+              file: file,
+              src: imgSrc,
+              results: null,
+            });
+
+            // Add thumbnail
+            const thumb = document.createElement("img");
+            thumb.src = imgSrc;
+            thumb.dataset.id = imgId;
+            thumb.title = file.name; // Tooltip shows filename initially
+            thumb.addEventListener("click", () => switchImage(imgId));
+            gallery.appendChild(thumb);
+
+            // Set this as the current image and show preview
+            currentImageId = imgId;
+            previewImage.src = imgSrc;
             previewBox.style.display = "block";
+            updateActiveThumbnail();
+            analyzeBtn.disabled = false;
           };
           reader.readAsDataURL(file);
-
-          analyzeBtn.disabled = false; // Enable analyze
-        } else {
-          previewBox.style.display = "none";
-          errorMsg.textContent =
-            "Invalid file type. Please upload a PNG or JPEG image.";
-          analyzeBtn.disabled = true; // Disable analyze
-        }
+        });
       });
 
       // Simulate progress bar and analysis
@@ -134,6 +167,47 @@
         }, 100);
       }
 
+      function switchImage(id) {
+        const selected = imagesData.find((img) => img.id === id);
+        if (!selected) return;
+
+        currentImageId = id;
+        previewImage.src = selected.src;
+        previewBox.style.display = "block";
+        updateActiveThumbnail();
+        removeBtn.disabled = false;
+
+        // Show that image's results if available
+        if (selected.results) {
+          displayResults(selected.results);
+          clearBtn.disabled = false;
+        } else {
+          resetResultsDisplay();
+          clearBtn.disabled = true;
+        }
+      }
+
+      function updateActiveThumbnail() {
+        document.querySelectorAll(".gallery img").forEach((thumb) => {
+          thumb.classList.toggle("active", thumb.dataset.id == currentImageId);
+        });
+      }
+
+      function displayResults(results) {
+        document.getElementById("complexityScore").textContent = results.score;
+        document.getElementById("penLifts").textContent = results.lifts;
+        document.getElementById("penReversals").textContent = results.reversals;
+        document.getElementById("penIntersections").textContent =
+          results.intersections;
+      }
+
+      function resetResultsDisplay() {
+        document.getElementById("complexityScore").textContent = "--";
+        document.getElementById("penLifts").textContent = "--";
+        document.getElementById("penReversals").textContent = "--";
+        document.getElementById("penIntersections").textContent = "--";
+      }
+
       // Analyze button click
       analyzeBtn.addEventListener("click", (e) => {
         e.preventDefault();
@@ -145,40 +219,81 @@
         errorMsg.textContent = "";
         simulateProgress();
 
-        // Fill in results after progress completes
+        // Fill in results after progress finishes
         setTimeout(() => {
-          document.getElementById("complexityScore").textContent = "78.5";
-          document.getElementById("penLifts").textContent = "3";
-          document.getElementById("penReversals").textContent = "12";
-          document.getElementById("penIntersections").textContent = "5";
+          const newResults = {
+            score: "78.5",
+            lifts: "3",
+            reversals: "12",
+            intersections: "5",
+          };
+
+          // Save results to current image
+          const img = imagesData.find((img) => img.id === currentImageId);
+          if (img) img.results = newResults;
+
+          // Update thumbnail tooltip with score
+          const thumb = gallery.querySelector(
+            `img[data-id='${currentImageId}']`
+          );
+          if (thumb) {
+            thumb.title = `${img.file.name} — Score: ${newResults.score}`;
+          }
+
+          displayResults(newResults);
+          clearBtn.disabled = false;
         }, 2200);
       });
 
       // Clear button click
       clearBtn.addEventListener("click", function () {
-        input.value = "";
-        previewBox.style.display = "none";
-        errorMsg.textContent = "";
-
-        // Reset progress bar
+        // Clear current image’s results, progress, and preview
         const progressBar = document.getElementById("progressBar");
+        const progressLabel = document.getElementById("progressLabel");
+
+        // Reset visual elements
         progressBar.style.width = "0%";
         progressBar.classList.remove("complete");
-
-        // Reset progress label
-        const progressLabel = document.getElementById("progressLabel");
         progressLabel.textContent = "";
         progressLabel.classList.remove("complete");
 
-        // Clear results
-        document.getElementById("complexityScore").textContent = "--";
-        document.getElementById("penLifts").textContent = "--";
-        document.getElementById("penReversals").textContent = "--";
-        document.getElementById("penIntersections").textContent = "--";
+        // Clear results for that image
+        if (currentImageId) {
+          const img = imagesData.find((img) => img.id === currentImageId);
+          if (img) img.results = null;
+        }
 
-        // Disable buttons until new file
-        analyzeBtn.disabled = true;
+        resetResultsDisplay();
         clearBtn.disabled = true;
+        removeBtn.disabled = !currentImageId;
+      });
+
+      // Remove From Cache button click
+      removeBtn.addEventListener("click", () => {
+        if (!currentImageId) return;
+
+        // Remove from imagesData array
+        imagesData = imagesData.filter((img) => img.id !== currentImageId);
+
+        // Remove thumbnail element
+        const thumb = gallery.querySelector(`img[data-id='${currentImageId}']`);
+        if (thumb) thumb.remove();
+
+        // Reset preview and results
+        resetResultsDisplay();
+        previewBox.style.display = "none";
+
+        // Disable all control buttons
+        clearBtn.disabled = true;
+        analyzeBtn.disabled = true;
+        removeBtn.disabled = true;
+
+        // If there are other images, select the first one
+        if (imagesData.length > 0) {
+          switchImage(imagesData[0].id);
+        } else {
+          currentImageId = null;
+        }
       });
     </script>
   </body>
