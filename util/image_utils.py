@@ -41,14 +41,16 @@ def find_max_dimensions(image_dir, label_dir):
     print(f"Max dimensions found: (Height: {max_h}, Width: {max_w})")
     return (max_h, max_w)
 
-def pad_image(img_arr, target_size):
+def pad_image(img_arr, target_size, pad_value=0):
     """
     Pads a NumPy image array (H, W, C) to a target size (target_h, target_w)
-    by adding black padding to center it.
+    by adding padding to center it.
 
     Args:
         img_arr (np.array): The image as a NumPy array.
         target_size (tuple): (target_h, target_w)
+        pad_value (int): The constant value to use for padding (0=black, 255=white).
+                         Defaults to 0.
 
     Returns:
         np.array: The padded image array.
@@ -70,7 +72,7 @@ def pad_image(img_arr, target_size):
     # We pad height (axis 0), width (axis 1), but not channels (axis 2)
     padding = ((pad_top, pad_bottom), (pad_left, pad_right), (0, 0))
 
-    # Apply padding with a constant value of 0 (black)
-    padded_arr = np.pad(img_arr, padding, mode='constant', constant_values=0)
+    # Apply padding with the specified constant value
+    padded_arr = np.pad(img_arr, padding, mode='constant', constant_values=pad_value)
     
     return padded_arr
