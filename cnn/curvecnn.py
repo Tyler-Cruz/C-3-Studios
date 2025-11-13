@@ -165,6 +165,89 @@ for i in range(2):
     plt.show()
 
 
+from scipy.ndimage import label
+
+curve_counts_pred = []
+
+for i, pred in enumerate(preds):
+    curve_pred = pred[:, :, 2]
+    curve_binary = (curve_pred > 0.5).astype(np.uint8)
+    labeled_array, num_features = label(curve_binary)
+    curve_counts_pred.append(num_features)
+    print(f"Image {i}: {num_features} predicted pen curves")
+
+import cv2
+from scipy.ndimage import label
+import numpy as np
+
+#counts curves found in prediction
+def count_pen_curves(mask, threshold=0.5, min_size=20):
+    mask = (mask * 255).astype(np.uint8)
+    _, binary = cv2.threshold(mask, int(threshold * 255), 255, cv2.THRESH_BINARY)
+
+    #morphological cleaning
+    kernel = np.ones((3, 3), np.uint8)
+    binary = cv2.morphologyEx(binary, cv2.MORPH_OPEN, kernel, iterations=2)
+    binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel, iterations=2)
+
+    #connected component analysis
+    labeled_array, num_features = label(binary > 0)
+
+    #filter out small noies
+    sizes = np.bincount(labeled_array.ravel())
+    sizes[0] = 0  # ignore background
+    num_features = np.sum(sizes > min_size)
+
+    return num_features, binary
+
+
+true_counts, pred_counts = [], []
+
+#loop through test
+for i in range(len(X_test)):
+    true_curve = y_test[i][:, :, 2]
+    pred_curve = preds[i][:, :, 2]
+
+    true_count, true_bin = count_pen_curves(true_curve, threshold=0.5)
+    pred_count, pred_bin = count_pen_curves(pred_curve, threshold=0.3)
+
+    true_counts.append(true_count)
+    pred_counts.append(pred_count)
+
+    print(f"Image {i}: True={true_count}, Predicted={pred_count}")
+
+    #visualization (not needed but useful for seeing if/when things go south)
+    if i < 3:  # show first few examples
+        plt.figure(figsize=(12, 4))
+        plt.subplot(1, 3, 1)
+        plt.title("Original")
+        plt.imshow(X_test[i].squeeze(), cmap='gray')
+        plt.axis('off')
+
+        plt.subplot(1, 3, 2)
+        plt.title(f"True Mask ({true_count} curves)")
+        plt.imshow(true_bin, cmap='gray')
+        plt.axis('off')
+
+        plt.subplot(1, 3, 3)
+        plt.title(f"Predicted Mask ({pred_count} curves)")
+        plt.imshow(pred_bin, cmap='hot')
+        plt.axis('off')
+        plt.show()
+
+#summary
+true_counts = np.array(true_counts)
+pred_counts = np.array(pred_counts)
+
+mae = np.mean(np.abs(true_counts - pred_counts))
+corr = np.corrcoef(true_counts, pred_counts)[0, 1]
+
+print("\n Curve Count Evaluation")
+print(f"Mean Absolute Error (MAE): {mae:.2f}")
+print(f"Correlation: {corr:.2f}")
+print(f"Average True Curves: {np.mean(true_counts):.2f}")
+print(f"Average Predicted Curves: {np.mean(pred_counts):.2f}")
+
 #hopefully will work to save the model
 # model.save("signature_feature_cnn.h5")
 # To reload:
