@@ -29,7 +29,7 @@ def load_signature_dataset(image_dir, label_dir, target_size=(128, 128), test_si
         label_path = os.path.join(label_dir, filename)
 
         if not os.path.exists(label_path):
-            print(f"⚠️ Missing label for {filename}, skipping.")
+            print(f"Missing label for {filename}, skipping.")
             continue
 
         #loads signature to be greyscale
@@ -132,7 +132,7 @@ history = model.fit(
 
 #evaluate
 test_loss, test_acc = model.evaluate(X_test, y_test, verbose=1)
-print(f"🧪 Test accuracy: {test_acc:.4f}, Test loss: {test_loss:.4f}")
+print(f"Test accuracy: {test_acc:.4f}, Test loss: {test_loss:.4f}")
 
 #displaying results
 preds = model.predict(X_test[:5])
