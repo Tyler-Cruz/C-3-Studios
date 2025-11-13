@@ -111,6 +111,14 @@
             return;
           }
 
+          // Automatically select and display the last uploaded image
+          if (imagesData.length > 0) {
+            const lastImage = imagesData[imagesData.length - 1];
+            switchImage(lastImage.id);
+            resetResultsDisplay();
+            analyzeBtn.disabled = false;
+          }
+
           const reader = new FileReader();
           reader.onload = function (e) {
             const imgId = Date.now() + Math.random(); // unique ID
