@@ -296,8 +296,9 @@
       // Analyze button click
       analyzeBtn.addEventListener("click", (e) => {
         e.preventDefault();
-        if (!input.files.length) {
-          errorMsg.textContent = "Please select a file before analyzing.";
+        if (!currentImageId || imagesData.length === 0) {
+          errorMsg.textContent =
+            "Please select or upload a file before analyzing.";
           return;
         }
 
