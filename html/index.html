@@ -23,7 +23,12 @@
     <main class="main-layout">
       <!-- Upload Section -->
       <section class="upload-section">
-        <input type="file" id="signatureInput" accept="image/png, image/jpeg" />
+        <input
+          type="file"
+          id="signatureInput"
+          accept="image/png, image/jpeg"
+          multiple
+        />
         <label for="signatureInput" class="upload-btn">Choose Signature</label>
 
         <div class="preview" id="previewBox">
@@ -89,6 +94,7 @@
       const removeBtn = document.getElementById("removeBtn");
       let imagesData = []; // stores { id, file, src, results }
       let currentImageId = null;
+      let analyzing = false; // prevent switching during analysis
 
       // Initially disable buttons
       analyzeBtn.disabled = true;
@@ -125,7 +131,9 @@
             thumb.src = imgSrc;
             thumb.dataset.id = imgId;
             thumb.title = file.name; // Tooltip shows filename initially
-            thumb.addEventListener("click", () => switchImage(imgId));
+            thumb.addEventListener("click", () => {
+              if (!analyzing) switchImage(imgId);
+            });
             gallery.appendChild(thumb);
 
             // Set this as the current image and show preview
@@ -145,6 +153,14 @@
         const label = document.getElementById("progressLabel");
 
         analyzeBtn.disabled = true; // disable during analysis
+        analyzing = true;
+
+        // Disable thumbnail interaction
+        document.querySelectorAll(".gallery img").forEach((thumb) => {
+          thumb.style.pointerEvents = "none";
+          thumb.style.opacity = "0.6";
+        });
+
         bar.classList.remove("complete");
         label.classList.remove("complete");
         label.textContent = "Analyzing...";
@@ -160,6 +176,12 @@
 
             analyzeBtn.disabled = false; // re-enable analyze
             clearBtn.disabled = false; // enable clear
+
+            analyzing = false;
+            document.querySelectorAll(".gallery img").forEach((thumb) => {
+              thumb.style.pointerEvents = "auto";
+              thumb.style.opacity = "1";
+            });
           } else {
             width += 5;
             bar.style.width = width + "%";
