@@ -272,3 +272,50 @@ footer {
     height: 100px;
   }
 }
+
+/* Drag-and-drop styling */
+.upload-section {
+  transition: border-color 0.3s, background-color 0.3s;
+}
+
+.upload-section.dragover {
+  border-color: #198754;
+  background-color: #f0fdf4;
+}
+
+.drop-text {
+  color: #ffffff;
+  font-style: italic;
+  margin-top: 1.2rem;
+}
+
+/* Gallery outline remains visible */
+.gallery {
+  border: 2px solid white;
+  padding: 10px;
+  border-radius: 8px;
+  min-height: 100px;
+  margin-top: 1rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-start;
+}
+
+.gallery img {
+  width: 80px;
+  height: 80px;
+  object-fit: cover;
+  border-radius: 6px;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: border 0.2s;
+}
+
+.gallery img:hover {
+  border-color: #0d6efd;
+}
+
+.gallery img.active {
+  border-color: #198754;
+}

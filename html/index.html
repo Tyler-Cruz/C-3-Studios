@@ -22,24 +22,22 @@
 
     <main class="main-layout">
       <!-- Upload Section -->
-      <section class="upload-section">
+      <section class="upload-section" id="dropZone">
         <input
           type="file"
           id="signatureInput"
           accept="image/png, image/jpeg"
           multiple
         />
-        <label for="signatureInput" class="upload-btn">Choose Signature</label>
+        <label for="signatureInput" class="upload-btn">Choose Signatures</label>
+        <p class="drop-text">or drag and drop images here</p>
 
         <div class="preview" id="previewBox">
           <p>Preview:</p>
           <img id="previewImage" alt="Signature Preview" />
         </div>
 
-        <!-- Image gallery for uploaded images -->
-        <div class="gallery" id="imageGallery">
-          <!-- Thumbnails will be dynamically inserted here -->
-        </div>
+        <div class="gallery" id="imageGallery"></div>
 
         <p class="error-message" id="errorMsg"></p>
 
@@ -49,7 +47,6 @@
           <button class="remove-btn" id="removeBtn">Remove From Cache</button>
         </div>
 
-        <!-- Progress label and bar -->
         <p id="progressLabel" class="progress-label"></p>
         <div class="progress-container">
           <div class="progress-bar" id="progressBar"></div>
@@ -146,6 +143,72 @@
           reader.readAsDataURL(file);
         });
       });
+
+      // --- DRAG & DROP MULTI-UPLOAD SUPPORT ---
+      const dropZone = document.getElementById("dropZone");
+
+      ["dragenter", "dragover"].forEach((eventName) => {
+        dropZone.addEventListener(eventName, (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          dropZone.classList.add("dragover");
+        });
+      });
+
+      ["dragleave", "drop"].forEach((eventName) => {
+        dropZone.addEventListener(eventName, (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          dropZone.classList.remove("dragover");
+        });
+      });
+
+      dropZone.addEventListener("drop", (e) => {
+        const files = Array.from(e.dataTransfer.files);
+        handleFiles(files);
+      });
+
+      // Reuse existing logic for uploads
+      function handleFiles(files) {
+        errorMsg.textContent = "";
+
+        files.forEach((file) => {
+          if (!["image/png", "image/jpeg"].includes(file.type)) {
+            errorMsg.textContent =
+              "Invalid file type. Please upload PNG or JPEG images.";
+            return;
+          }
+
+          const reader = new FileReader();
+          reader.onload = function (e) {
+            const imgId = Date.now() + Math.random(); // unique ID
+            const imgSrc = e.target.result;
+
+            imagesData.push({
+              id: imgId,
+              file: file,
+              src: imgSrc,
+              results: null,
+            });
+
+            // Add thumbnail
+            const thumb = document.createElement("img");
+            thumb.src = imgSrc;
+            thumb.dataset.id = imgId;
+            thumb.title = file.name;
+            thumb.addEventListener("click", () => switchImage(imgId));
+            gallery.appendChild(thumb);
+
+            // Set this as current image
+            currentImageId = imgId;
+            previewImage.src = imgSrc;
+            previewBox.style.display = "block";
+            updateActiveThumbnail();
+            analyzeBtn.disabled = false;
+          };
+          reader.readAsDataURL(file);
+        });
+      }
 
       // Simulate progress bar and analysis
       function simulateProgress() {
