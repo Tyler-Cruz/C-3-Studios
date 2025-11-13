@@ -22,19 +22,22 @@
 
     <main class="main-layout">
       <!-- Upload Section -->
-      <section class="upload-section">
-        <input type="file" id="signatureInput" accept="image/png, image/jpeg" />
-        <label for="signatureInput" class="upload-btn">Choose Signature</label>
+      <section class="upload-section" id="dropZone">
+        <input
+          type="file"
+          id="signatureInput"
+          accept="image/png, image/jpeg"
+          multiple
+        />
+        <label for="signatureInput" class="upload-btn">Choose Signatures</label>
+        <p class="drop-text">or drag and drop images here</p>
 
         <div class="preview" id="previewBox">
           <p>Preview:</p>
           <img id="previewImage" alt="Signature Preview" />
         </div>
 
-        <!-- Image gallery for uploaded images -->
-        <div class="gallery" id="imageGallery">
-          <!-- Thumbnails will be dynamically inserted here -->
-        </div>
+        <div class="gallery" id="imageGallery"></div>
 
         <p class="error-message" id="errorMsg"></p>
 
@@ -44,7 +47,6 @@
           <button class="remove-btn" id="removeBtn">Remove From Cache</button>
         </div>
 
-        <!-- Progress label and bar -->
         <p id="progressLabel" class="progress-label"></p>
         <div class="progress-container">
           <div class="progress-bar" id="progressBar"></div>
@@ -89,6 +91,7 @@
       const removeBtn = document.getElementById("removeBtn");
       let imagesData = []; // stores { id, file, src, results }
       let currentImageId = null;
+      let analyzing = false; // prevent switching during analysis
 
       // Initially disable buttons
       analyzeBtn.disabled = true;
@@ -99,6 +102,82 @@
       // Handle multiple file uploads
       input.addEventListener("change", function () {
         const files = Array.from(this.files);
+        errorMsg.textContent = "";
+
+        files.forEach((file) => {
+          if (!["image/png", "image/jpeg"].includes(file.type)) {
+            errorMsg.textContent =
+              "Invalid file type. Please upload PNG or JPEG images.";
+            return;
+          }
+
+          // Automatically select and display the last uploaded image
+          if (imagesData.length > 0) {
+            const lastImage = imagesData[imagesData.length - 1];
+            switchImage(lastImage.id);
+            resetResultsDisplay();
+            analyzeBtn.disabled = false;
+          }
+
+          const reader = new FileReader();
+          reader.onload = function (e) {
+            const imgId = Date.now() + Math.random(); // unique ID
+            const imgSrc = e.target.result;
+
+            imagesData.push({
+              id: imgId,
+              file: file,
+              src: imgSrc,
+              results: null,
+            });
+
+            // Add thumbnail
+            const thumb = document.createElement("img");
+            thumb.src = imgSrc;
+            thumb.dataset.id = imgId;
+            thumb.title = file.name; // Tooltip shows filename initially
+            thumb.addEventListener("click", () => {
+              if (!analyzing) switchImage(imgId);
+            });
+            gallery.appendChild(thumb);
+
+            // Set this as the current image and show preview
+            currentImageId = imgId;
+            previewImage.src = imgSrc;
+            previewBox.style.display = "block";
+            updateActiveThumbnail();
+            analyzeBtn.disabled = false;
+          };
+          reader.readAsDataURL(file);
+        });
+      });
+
+      // --- DRAG & DROP MULTI-UPLOAD SUPPORT ---
+      const dropZone = document.getElementById("dropZone");
+
+      ["dragenter", "dragover"].forEach((eventName) => {
+        dropZone.addEventListener(eventName, (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          dropZone.classList.add("dragover");
+        });
+      });
+
+      ["dragleave", "drop"].forEach((eventName) => {
+        dropZone.addEventListener(eventName, (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          dropZone.classList.remove("dragover");
+        });
+      });
+
+      dropZone.addEventListener("drop", (e) => {
+        const files = Array.from(e.dataTransfer.files);
+        handleFiles(files);
+      });
+
+      // Reuse existing logic for uploads
+      function handleFiles(files) {
         errorMsg.textContent = "";
 
         files.forEach((file) => {
@@ -124,11 +203,11 @@
             const thumb = document.createElement("img");
             thumb.src = imgSrc;
             thumb.dataset.id = imgId;
-            thumb.title = file.name; // Tooltip shows filename initially
+            thumb.title = file.name;
             thumb.addEventListener("click", () => switchImage(imgId));
             gallery.appendChild(thumb);
 
-            // Set this as the current image and show preview
+            // Set this as current image
             currentImageId = imgId;
             previewImage.src = imgSrc;
             previewBox.style.display = "block";
@@ -137,7 +216,7 @@
           };
           reader.readAsDataURL(file);
         });
-      });
+      }
 
       // Simulate progress bar and analysis
       function simulateProgress() {
@@ -145,6 +224,14 @@
         const label = document.getElementById("progressLabel");
 
         analyzeBtn.disabled = true; // disable during analysis
+        analyzing = true;
+
+        // Disable thumbnail interaction
+        document.querySelectorAll(".gallery img").forEach((thumb) => {
+          thumb.style.pointerEvents = "none";
+          thumb.style.opacity = "0.6";
+        });
+
         bar.classList.remove("complete");
         label.classList.remove("complete");
         label.textContent = "Analyzing...";
@@ -160,6 +247,12 @@
 
             analyzeBtn.disabled = false; // re-enable analyze
             clearBtn.disabled = false; // enable clear
+
+            analyzing = false;
+            document.querySelectorAll(".gallery img").forEach((thumb) => {
+              thumb.style.pointerEvents = "auto";
+              thumb.style.opacity = "1";
+            });
           } else {
             width += 5;
             bar.style.width = width + "%";
@@ -211,8 +304,9 @@
       // Analyze button click
       analyzeBtn.addEventListener("click", (e) => {
         e.preventDefault();
-        if (!input.files.length) {
-          errorMsg.textContent = "Please select a file before analyzing.";
+        if (!currentImageId || imagesData.length === 0) {
+          errorMsg.textContent =
+            "Please select or upload a file before analyzing.";
           return;
         }
 
