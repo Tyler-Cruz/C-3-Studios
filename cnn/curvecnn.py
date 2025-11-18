@@ -1,56 +1,77 @@
-#mandatory flags
+# mandatory flags
 import os
-os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"  # Suppress INFO and WARNING logs
-os.environ["TF_ENABLE_ONEDNN_OPTS"] = "1"  # Enable oneDNN optimizations for CPU
-os.environ["TF_FORCE_GPU_ALLOW_GROWTH"] = "true"  # Prevent TensorFlow from grabbing all GPU memory
-os.environ["TF_XLA_FLAGS"] = "--tf_xla_enable_xla_devices"  # Enable XLA compilation for performance
-os.environ["TF_GPU_THREAD_MODE"] = "gpu_private"  # Optimize GPU threading
-os.environ["TF_USE_CUDNN_BATCHNORM_SPATIAL_PERSISTENT"] = "1"  # Faster batchnorm
-os.environ["TF_DETERMINISTIC_OPS"] = "0"  # Allow non-deterministic fast ops
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
+os.environ["TF_ENABLE_ONEDNN_OPTS"] = "1"
+os.environ["TF_FORCE_GPU_ALLOW_GROWTH"] = "true"
+os.environ["TF_XLA_FLAGS"] = "--tf_xla_enable_xla_devices"
+os.environ["TF_GPU_THREAD_MODE"] = "gpu_private"
+os.environ["TF_USE_CUDNN_BATCHNORM_SPATIAL_PERSISTENT"] = "1"
+os.environ["TF_DETERMINISTIC_OPS"] = "0"
 
-#imports
+# imports
 import tensorflow as tf
 from tensorflow.keras import layers, models, backend as K
 import numpy as np
 import matplotlib.pyplot as plt
 from tensorflow.keras.preprocessing.image import load_img, img_to_array
-import os
 from sklearn.model_selection import train_test_split
+import cv2
+from scipy.ndimage import label
 
-#dataset loading
-def load_signature_dataset(image_dir, label_dir, target_size=(128, 128), test_size=0.1, val_size=0.1):
-
+#dataset loading (only set to two channels until lift data is in)
+def load_signature_dataset(image_dir, cross_dir, curve_dir, target_size=(128, 128), test_size=0.1, val_size=0.1):
+    """
+    Loads images and combines two separate mask files (Cross, Curve) 
+    into a single 2-channel label.
+    Channel 0 (Red)   = Crosses
+    Channel 1 (Green) = Curves
+    """
     image_files = sorted(os.listdir(image_dir))
     X, y = [], []
 
+    print(f"Loading data from:\n Images: {image_dir}\n Crosses: {cross_dir}\n Curves: {curve_dir}")
+
     for filename in image_files:
         image_path = os.path.join(image_dir, filename)
-        #may need updating later once other datasets are implemented
-        label_path = os.path.join(label_dir, filename)
+        
+        # Paths for the 2 different masks
+        cross_mask_path = os.path.join(cross_dir, filename)
+        curve_mask_path = os.path.join(curve_dir, filename)
 
-        if not os.path.exists(label_path):
-            print(f"Missing label for {filename}, skipping.")
+        # Skip if any mask is missing
+        if not (os.path.exists(cross_mask_path) and os.path.exists(curve_mask_path)):
+            print(f"Missing one or more labels for {filename}, skipping.")
             continue
 
-        #loads signature to be greyscale
+        # 1. Load Input Image (Grayscale)
         img = load_img(image_path, color_mode='grayscale', target_size=target_size)
         img_arr = img_to_array(img) / 255.0
         X.append(img_arr)
 
-        #loads the marked signautres so each type is its own color
-        #will probably have to be updated again once more datasets get added
-        mask = load_img(label_path, color_mode='rgb', target_size=target_size)
-        mask_arr = img_to_array(mask) / 255.0
+        # 2. Load Each Label Mask (Grayscale)
+        # We load them individually and then stack them.
+        cross_mask = img_to_array(load_img(cross_mask_path, color_mode='grayscale', target_size=target_size))
+        curve_mask = img_to_array(load_img(curve_mask_path, color_mode='grayscale', target_size=target_size))
 
-        #makes each color a binary
-        mask_arr = (mask_arr > 0.5).astype(np.float32)  # threshold to binary
-        y.append(mask_arr)
+        # Normalize to 0-1
+        cross_mask /= 255.0
+        curve_mask /= 255.0
+
+        # Threshold to binary (0 or 1)
+        cross_mask = (cross_mask > 0.5).astype(np.float32)
+        curve_mask = (curve_mask > 0.5).astype(np.float32)
+
+        # 3. Stack into a single (128, 128, 2) tensor
+        # axis=-1 stacks along the depth (channels)
+        combined_mask = np.concatenate([cross_mask, curve_mask], axis=-1)
+        y.append(combined_mask)
 
     X = np.array(X, dtype=np.float32)
     y = np.array(y, dtype=np.float32)
 
-    print(f"Loaded {len(X)} samples from {image_dir}")
+    print(f"Successfully loaded {len(X)} samples.")
 
+    # Split data
     X_train, X_temp, y_train, y_temp = train_test_split(X, y, test_size=(val_size + test_size), random_state=42)
     relative_val_size = val_size / (val_size + test_size)
     X_val, X_test, y_val, y_test = train_test_split(X_temp, y_temp, test_size=(1 - relative_val_size), random_state=42)
@@ -71,6 +92,7 @@ def bce_dice_loss(y_true, y_pred):
     bce = tf.keras.losses.binary_crossentropy(y_true, y_pred)
     dice = dice_loss(y_true, y_pred)
     return bce + dice
+
 
 #structures the cnn 
 def create_signature_cnn(input_shape=(128, 128, 1)):
@@ -103,17 +125,29 @@ def create_signature_cnn(input_shape=(128, 128, 1)):
     c5 = layers.Conv2D(64, (3,3), activation='relu', padding='same')(u2)
     c5 = layers.BatchNormalization()(c5)
 
-    outputs = layers.Conv2D(3, (1,1), activation='sigmoid')(c5)
+    # OUTPUT: 2 Channels (Cross, Curve)
+    outputs = layers.Conv2D(2, (1,1), activation='sigmoid')(c5)
 
     model = models.Model(inputs, outputs, name="SignatureFeatureExtractor")
     return model
 
-#load data
-image_dir = 'Data/Padded_Raw'
-label_dir = 'Data/Curve'
-X_train, X_val, X_test, y_train, y_val, y_test = load_signature_dataset(image_dir, label_dir)
 
-#compile and train
+# --- MAIN EXECUTION ---
+
+# Define Directories
+image_dir = 'Data/Padded_Raw'
+cross_dir = 'Data/Padded_Labels' # Corresponds to Pen Crosses
+curve_dir = 'Data/Padded_Curve'  # Corresponds to Pen Curves
+
+# Load Data
+try:
+    X_train, X_val, X_test, y_train, y_val, y_test = load_signature_dataset(image_dir, cross_dir, curve_dir)
+except Exception as e:
+    print(f"Error loading data: {e}")
+    print(f"Please ensure '{image_dir}', '{cross_dir}', and '{curve_dir}' directories exist and contain the mask images.")
+    exit()
+
+# Compile Model
 model = create_signature_cnn(input_shape=(128, 128, 1))
 model.compile(
     optimizer=tf.keras.optimizers.Adam(learning_rate=1e-4),
@@ -122,131 +156,108 @@ model.compile(
 )
 model.summary()
 
+# Train
 history = model.fit(
     X_train, y_train,
     validation_data=(X_val, y_val),
-    epochs=25,
+    epochs=25, 
     batch_size=8,
     verbose=1
 )
 
-#evaluate
+# Evaluate
 test_loss, test_acc = model.evaluate(X_test, y_test, verbose=1)
 print(f"Test accuracy: {test_acc:.4f}, Test loss: {test_loss:.4f}")
 
-#displaying results
-preds = model.predict(X_test[:5])
+# --- PREDICTION & COUNTING ---
+preds = model.predict(X_test)
 
-# visualize the loaded labels
-for i in range(2):
-    plt.figure(figsize=(10,4))
-    plt.subplot(1,4,1)
-    plt.imshow(X_train[i].squeeze(), cmap='gray')
-    plt.title("Signature")
-    plt.axis('off')
-
-    #Lift
-    plt.subplot(1,4,2)
-    plt.imshow(y_train[i][:,:,0], cmap='Reds')
-    plt.title("Pen Lift")
-    plt.axis('off')
-
-    #Cross
-    plt.subplot(1,4,3)
-    plt.imshow(y_train[i][:,:,1], cmap='Greens')
-    plt.title("Pen Cross")
-    plt.axis('off')
-
-    #Curve
-    plt.subplot(1,4,4)
-    plt.imshow(y_train[i][:,:,2], cmap='Blues')
-    plt.title("Pen Curve")
-    plt.axis('off')
-    plt.show()
-
-
-from scipy.ndimage import label
-
-curve_counts_pred = []
-
-for i, pred in enumerate(preds):
-    curve_pred = pred[:, :, 2]
-    curve_binary = (curve_pred > 0.5).astype(np.uint8)
-    labeled_array, num_features = label(curve_binary)
-    curve_counts_pred.append(num_features)
-    print(f"Image {i}: {num_features} predicted pen curves")
-
-import cv2
-from scipy.ndimage import label
-import numpy as np
-
-#counts curves found in prediction
-def count_pen_curves(mask, threshold=0.5, min_size=20):
+# Helper function to count blobs (connected components)
+def count_features(mask, threshold=0.5, min_size=5):
     mask = (mask * 255).astype(np.uint8)
     _, binary = cv2.threshold(mask, int(threshold * 255), 255, cv2.THRESH_BINARY)
 
-    #morphological cleaning
+    # Morphological cleaning
     kernel = np.ones((3, 3), np.uint8)
-    binary = cv2.morphologyEx(binary, cv2.MORPH_OPEN, kernel, iterations=2)
-    binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel, iterations=2)
-
-    #connected component analysis
+    binary = cv2.morphologyEx(binary, cv2.MORPH_OPEN, kernel, iterations=1)
+    
+    # Connected component analysis
     labeled_array, num_features = label(binary > 0)
-
-    #filter out small noies
+    
+    # Filter small noise
     sizes = np.bincount(labeled_array.ravel())
-    sizes[0] = 0  # ignore background
-    num_features = np.sum(sizes > min_size)
-
+    if len(sizes) > 1:
+        sizes[0] = 0  # ignore background
+        num_features = np.sum(sizes > min_size)
+    else:
+        num_features = 0
+        
     return num_features, binary
 
+# Storage for metrics
+metrics = {
+    "Cross": {"true": [], "pred": []},
+    "Curve": {"true": [], "pred": []}
+}
 
-true_counts, pred_counts = [], []
+# Channel mapping: 0 -> Cross, 1 -> Curve
+channel_names = {0: "Cross", 1: "Curve"} 
 
-#loop through test
+# Iterate through test set
 for i in range(len(X_test)):
-    true_curve = y_test[i][:, :, 2]
-    pred_curve = preds[i][:, :, 2]
+    # Loop through the 2 channels
+    for channel_idx in range(2): # Now only 2 channels
+        c_name = channel_names[channel_idx]
+        
+        true_mask = y_test[i][:, :, channel_idx]
+        pred_mask = preds[i][:, :, channel_idx]
 
-    true_count, true_bin = count_pen_curves(true_curve, threshold=0.5)
-    pred_count, pred_bin = count_pen_curves(pred_curve, threshold=0.3)
+        # Count
+        true_count, _ = count_features(true_mask, threshold=0.5)
+        pred_count, _ = count_features(pred_mask, threshold=0.5)
 
-    true_counts.append(true_count)
-    pred_counts.append(pred_count)
+        metrics[c_name]["true"].append(true_count)
+        metrics[c_name]["pred"].append(pred_count)
 
-    print(f"Image {i}: True={true_count}, Predicted={pred_count}")
-
-    #visualization (not needed but useful for seeing if/when things go south)
-    if i < 3:  # show first few examples
-        plt.figure(figsize=(12, 4))
-        plt.subplot(1, 3, 1)
-        plt.title("Original")
+    # Visualization for the first few images
+    if i < 3:
+        plt.figure(figsize=(9, 4)) # Adjusted figsize for 3 plots
+        
+        # Original Image
+        plt.subplot(1, 3, 1) # Adjusted subplot for 3 plots
         plt.imshow(X_test[i].squeeze(), cmap='gray')
+        plt.title("Original")
         plt.axis('off')
-
-        plt.subplot(1, 3, 2)
-        plt.title(f"True Mask ({true_count} curves)")
-        plt.imshow(true_bin, cmap='gray')
-        plt.axis('off')
-
-        plt.subplot(1, 3, 3)
-        plt.title(f"Predicted Mask ({pred_count} curves)")
-        plt.imshow(pred_bin, cmap='hot')
-        plt.axis('off')
+        
+        # Show predicted masks for each type
+        for idx in range(2): # Now only 2 channels for visualization
+            plt.subplot(1, 3, idx + 2) # Adjusted subplot position
+            # Use Red for Cross, Green for Curve (arbitrary choice for now)
+            cmap = ['Reds', 'Greens'][idx] 
+            plt.imshow(preds[i][:, :, idx], cmap=cmap, alpha=0.8)
+            plt.title(f"{channel_names[idx]} (Pred)")
+            plt.axis('off')
+            
+        plt.tight_layout()
         plt.show()
 
-#summary
-true_counts = np.array(true_counts)
-pred_counts = np.array(pred_counts)
+# --- Summary ---
+print("\n--- Final Analysis Report ---")
+for key in ["Cross", "Curve"]: # Only these two keys now
+    t = np.array(metrics[key]["true"])
+    p = np.array(metrics[key]["pred"])
+    
+    mae = np.mean(np.abs(t - p))
+    corr = np.corrcoef(t, p)[0, 1] if np.std(t) > 0 and np.std(p) > 0 else 0
+    
+    print(f"\n{key.upper()}:")
+    print(f"  MAE: {mae:.2f}")
+    print(f"  Correlation: {corr:.2f}")
+    print(f"  Avg True: {np.mean(t):.2f} | Avg Pred: {np.mean(p):.2f}")
 
-mae = np.mean(np.abs(true_counts - pred_counts))
-corr = np.corrcoef(true_counts, pred_counts)[0, 1]
-
-print("\n Curve Count Evaluation")
-print(f"Mean Absolute Error (MAE): {mae:.2f}")
-print(f"Correlation: {corr:.2f}")
-print(f"Average True Curves: {np.mean(true_counts):.2f}")
-print(f"Average Predicted Curves: {np.mean(pred_counts):.2f}")
+# Save the unified model
+model.save("signature_cross_curve_model.h5") # Changed model name
+print("\nModel saved as 'signature_cross_curve_model.h5'")
 
 #hopefully will work to save the model
 # model.save("signature_feature_cnn.h5")
