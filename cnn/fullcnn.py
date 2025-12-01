@@ -196,3 +196,6 @@ for i in range(len(X_test)):
 df = pd.DataFrame(results)
 df.to_csv("signature_features.csv", index=False)
 print(df.head())
+
+#exporting model
+model.save("saved_model/model.keras")
