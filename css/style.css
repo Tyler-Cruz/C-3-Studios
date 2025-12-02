@@ -11,19 +11,35 @@ body {
 header {
   background: #bfa362ea;
   color: #ffffff;
-  padding: 1rem;
-}
+  padding: 1rem 2rem;
 
-.header-container {
+  /* Horizontal layout */
   display: flex;
   align-items: center;
-  justify-content: flex-start;
-  gap: 5rem;
+  justify-content: space-between;
 }
 
+/* Left side: logo + title */
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 3rem; /* previously 5rem, but adjustable */
+}
+
+/* Logo formatting */
 .logo {
   height: 100px;
   filter: brightness(0) invert(1);
+}
+
+/* Help button anchor */
+.help-button img {
+  max-width: 40px;
+  height: auto;
+  cursor: pointer;
+
+  /* ensure it's always visible on the right */
+  display: block;
 }
 
 /* ========== Main Layout ========== */
