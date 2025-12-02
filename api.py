@@ -2,12 +2,15 @@ from flask import Flask, request, jsonify
 import tensorflow as tf
 import numpy as np
 import cv2
+from flask_cors import CORS   # NEW
 
 app = Flask(__name__)
+CORS(app)  # NEW: allows frontend to call the model
 
-# Load model (Keras 3 .keras format)
+# Load model
 MODEL_PATH = "saved_model/model.keras"
 model = tf.keras.models.load_model(MODEL_PATH, compile=False)
+
 
 def preprocess_image(file, target_size=(128,128)):
     file_bytes = np.frombuffer(file.read(), np.uint8)
@@ -37,6 +40,11 @@ def predict():
     cross = count_components(pred[..., 2])
 
     complexity = curve + lift + cross
+
+    # forcibly prevent saving ANY uploaded file
+    file.stream.seek(0)
+    temp_bytes = file.read()
+    file.stream.seek(0)
 
     return jsonify({
         "score": float(complexity),

@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Signature Complexity Analyzer</title>
+    <link rel="stylesheet" href="../css/style.css" />
+  </head>
+  <body>
+    <header>
+      <div class="header-container">
+        <img
+          src="../images/CStudiosLogo.png"
+          alt="C Studios Logo"
+          class="logo"
+        />
+        <div>
+          <h1>Signature Complexity Analyzer</h1>
+        </div>
+      </div>
+    </header>
+
+    <main class="main-layout">
+      <!-- Upload Section -->
+      <section class="upload-section" id="dropZone">
+        <input
+          type="file"
+          id="signatureInput"
+          accept="image/png, image/jpeg"
+          multiple
+        />
+        <label for="signatureInput" class="upload-btn">Choose Signatures</label>
+        <p class="drop-text">or drag and drop images here</p>
+
+        <div class="preview" id="previewBox">
+          <p>Preview:</p>
+          <img id="previewImage" alt="Signature Preview" />
+        </div>
+
+        <div class="gallery" id="imageGallery"></div>
+
+        <p class="error-message" id="errorMsg"></p>
+
+        <div class="button-group">
+          <button class="analyze-btn" id="analyzeBtn">Analyze</button>
+          <button class="clear-btn" id="clearBtn">Clear Results</button>
+          <button class="remove-btn" id="removeBtn">Remove From Cache</button>
+        </div>
+
+        <p id="progressLabel" class="progress-label"></p>
+        <div class="progress-container">
+          <div class="progress-bar" id="progressBar"></div>
+        </div>
+      </section>
+
+      <!-- Results Section -->
+      <section class="results-panel">
+        <h2>Analysis Results</h2>
+        <p>Overall Complexity Score:</p>
+        <p class="score" id="complexityScore">--</p>
+
+        <div class="metrics">
+          <div class="metric">
+            <h3>Pen Lifts</h3>
+            <p id="penLifts">--</p>
+          </div>
+          <div class="metric">
+            <h3>Pen Reversals</h3>
+            <p id="penReversals">--</p>
+          </div>
+          <div class="metric">
+            <h3>Pen Intersections</h3>
+            <p id="penIntersections">--</p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <p>&copy; C<sup>3</sup> Studios</p>
+    </footer>
+
+    <script>
+      const analyzeBtn = document.getElementById("analyzeBtn");
+      const clearBtn = document.getElementById("clearBtn");
+      const input = document.getElementById("signatureInput");
+      const previewBox = document.getElementById("previewBox");
+      const previewImage = document.getElementById("previewImage");
+      const errorMsg = document.getElementById("errorMsg");
+      const gallery = document.getElementById("imageGallery");
+      const removeBtn = document.getElementById("removeBtn");
+      let imagesData = []; // stores { id, file, src, results }
+      let currentImageId = null;
+      let analyzing = false; // prevent switching during analysis
+
+      // Initially disable buttons
+      analyzeBtn.disabled = true;
+      clearBtn.disabled = true;
+      removeBtn.disabled = true;
+
+      // Enable Analyze button only when a valid file is selected
+      // Handle multiple file uploads
+      input.addEventListener("change", function () {
+        handleFiles(Array.from(this.files));
+      });
+
+      // Drag & Drop
+      const dropZone = document.getElementById("dropZone");
+      ["dragenter", "dragover"].forEach((eventName) => {
+        dropZone.addEventListener(eventName, (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          dropZone.classList.add("dragover");
+        });
+      });
+
+      ["dragleave", "drop"].forEach((eventName) => {
+        dropZone.addEventListener(eventName, (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          dropZone.classList.remove("dragover");
+        });
+      });
+
+      dropZone.addEventListener("drop", (e) => {
+        handleFiles(Array.from(e.dataTransfer.files));
+      });
+
+      // Reuse existing logic for uploads
+      function handleFiles(files) {
+        errorMsg.textContent = "";
+
+        files.forEach((file) => {
+          if (!["image/png", "image/jpeg"].includes(file.type)) {
+            errorMsg.textContent =
+              "Invalid file type. Please upload PNG or JPEG images.";
+            return;
+          }
+
+          const reader = new FileReader();
+          reader.onload = function (e) {
+            const imgId = Date.now() + Math.random();
+            const imgSrc = e.target.result;
+
+            imagesData.push({ id: imgId, file, src: imgSrc, results: null });
+
+            // Add thumbnail
+            const thumb = document.createElement("img");
+            thumb.src = imgSrc;
+            thumb.dataset.id = imgId;
+            thumb.title = file.name; // Tooltip shows filename initially
+            thumb.addEventListener("click", () => {
+              if (!analyzing) switchImage(imgId);
+            });
+            gallery.appendChild(thumb);
+
+            // Set this as the current image and show preview
+            currentImageId = imgId;
+            previewImage.src = imgSrc;
+            previewBox.style.display = "block";
+            updateActiveThumbnail();
+            analyzeBtn.disabled = false;
+          };
+          reader.readAsDataURL(file);
+        });
+      }
+
+      function updateActiveThumbnail() {
+        document.querySelectorAll(".gallery img").forEach((thumb) => {
+          thumb.classList.toggle("active", thumb.dataset.id == currentImageId);
+        });
+      }
+
+      function switchImage(id) {
+        const selected = imagesData.find((img) => img.id === id);
+        if (!selected) return;
+
+        currentImageId = id;
+        previewImage.src = selected.src;
+        previewBox.style.display = "block";
+        updateActiveThumbnail();
+        removeBtn.disabled = false;
+
+        if (selected.results) {
+          displayResults(selected.results);
+          clearBtn.disabled = false;
+        } else {
+          resetResultsDisplay();
+          clearBtn.disabled = true;
+        }
+      }
+
+      function simulateProgress() {
+        const bar = document.getElementById("progressBar");
+        const label = document.getElementById("progressLabel");
+
+        analyzeBtn.disabled = true;
+        analyzing = true;
+
+        document.querySelectorAll(".gallery img").forEach((thumb) => {
+          thumb.style.pointerEvents = "none";
+          thumb.style.opacity = "0.6";
+        });
+
+        bar.classList.remove("complete");
+        label.classList.remove("complete");
+        label.textContent = "Analyzing...";
+        bar.style.width = "0%";
+
+        let width = 0;
+        const interval = setInterval(() => {
+          if (width >= 100) {
+            clearInterval(interval);
+            bar.classList.add("complete");
+            label.textContent = "Complete!";
+            label.classList.add("complete");
+
+            analyzeBtn.disabled = false;
+            clearBtn.disabled = false;
+            analyzing = false;
+
+            document.querySelectorAll(".gallery img").forEach((thumb) => {
+              thumb.style.pointerEvents = "auto";
+              thumb.style.opacity = "1";
+            });
+          } else {
+            width += 5;
+            bar.style.width = width + "%";
+          }
+        }, 100);
+      }
+
+      //Properly gets the results
+      function displayResults(results) {
+        document.getElementById("complexityScore").textContent =
+          results.score ?? "--";
+        document.getElementById("penLifts").textContent =
+          results.lifts ?? "--";
+        document.getElementById("penReversals").textContent =
+          results.reversals ?? "--";
+        document.getElementById("penIntersections").textContent =
+          results.intersections ?? "--";
+      }
+
+      function resetResultsDisplay() {
+        document.getElementById("complexityScore").textContent = "--";
+        document.getElementById("penLifts").textContent = "--";
+        document.getElementById("penReversals").textContent = "--";
+        document.getElementById("penIntersections").textContent = "--";
+      }
+      analyzeBtn.addEventListener("click", (e) => {
+        e.preventDefault();
+
+        if (!currentImageId) {
+          errorMsg.textContent =
+            "Please select or upload a file before analyzing.";
+          return;
+        }
+
+        const img = imagesData.find((img) => img.id === currentImageId);
+
+        if (!img) return;
+
+        errorMsg.textContent = "";
+        simulateProgress();
+
+        setTimeout(() => {
+          const formData = new FormData();
+          formData.append("file", img.file);
+
+          fetch("http://localhost:5000/predict", {
+            method: "POST",
+            body: formData,
+          })
+            .then((res) => res.json())
+            .then((data) => {
+              img.results = data;
+
+              const thumb = gallery.querySelector(
+                `img[data-id='${currentImageId}']`
+              );
+              if (thumb) {
+                thumb.title = `${img.file.name} — Score: ${data.score}`;
+              }
+
+              displayResults(data);
+              clearBtn.disabled = false;
+            })
+            .catch((err) => {
+              console.error(err);
+              errorMsg.textContent = "Error contacting analysis backend.";
+            });
+        }, 2200);
+      });
+
+      clearBtn.addEventListener("click", function () {
+        const progressBar = document.getElementById("progressBar");
+        const progressLabel = document.getElementById("progressLabel");
+
+        progressBar.style.width = "0%";
+        progressBar.classList.remove("complete");
+        progressLabel.textContent = "";
+        progressLabel.classList.remove("complete");
+
+        if (currentImageId) {
+          const img = imagesData.find((img) => img.id === currentImageId);
+          if (img) img.results = null;
+        }
+
+        resetResultsDisplay();
+        clearBtn.disabled = true;
+        removeBtn.disabled = !currentImageId;
+      });
+
+      removeBtn.addEventListener("click", () => {
+        if (!currentImageId) return;
+
+        imagesData = imagesData.filter((img) => img.id !== currentImageId);
+
+        const thumb = gallery.querySelector(
+          `img[data-id='${currentImageId}']`
+        );
+        if (thumb) thumb.remove();
+
+        resetResultsDisplay();
+        previewBox.style.display = "none";
+
+        clearBtn.disabled = true;
+        analyzeBtn.disabled = true;
+        removeBtn.disabled = true;
+
+        // Automatically select and display the last uploaded image
+        if (imagesData.length > 0) {
+          switchImage(imagesData[0].id);
+        } else {
+          currentImageId = null;
+        }
+      });
+    </script>
+  </body>
+</html>
