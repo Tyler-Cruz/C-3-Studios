@@ -13,5 +13,3 @@ Poster - https://docs.google.com/presentation/d/1oix9FBmtYtAmKcv__2eZgW2T6lP0fB4
 User Manual - https://docs.google.com/document/d/1h8YiLNiSJhIVjDvnaBJdvL4WyET_au8i3qmmuaaB0bM/edit?tab=t.0
 
 Technical Specifications - https://docs.google.com/document/d/1xJYdwO6yxRyahg8iSUWvUFggER1BZQ2zidTq4fViEpk/edit?tab=t.0
-
-Sprint 6 Report - https://docs.google.com/document/d/19x7njLfC_oNa0cdVAaURA22Q2lXY57YPX8iRjxOvQJ4/edit?tab=t.0
