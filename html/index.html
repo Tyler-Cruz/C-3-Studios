@@ -102,55 +102,7 @@
       // Enable Analyze button only when a valid file is selected
       // Handle multiple file uploads
       input.addEventListener("change", function () {
-        const files = Array.from(this.files);
-        errorMsg.textContent = "";
-
-        files.forEach((file) => {
-          if (!["image/png", "image/jpeg"].includes(file.type)) {
-            errorMsg.textContent =
-              "Invalid file type. Please upload PNG or JPEG images.";
-            return;
-          }
-
-          // Automatically select and display the last uploaded image
-          if (imagesData.length > 0) {
-            const lastImage = imagesData[imagesData.length - 1];
-            switchImage(lastImage.id);
-            resetResultsDisplay();
-            analyzeBtn.disabled = false;
-          }
-
-          const reader = new FileReader();
-          reader.onload = function (e) {
-            const imgId = Date.now() + Math.random(); // unique ID
-            const imgSrc = e.target.result;
-
-            imagesData.push({
-              id: imgId,
-              file: file,
-              src: imgSrc,
-              results: null,
-            });
-
-            // Add thumbnail
-            const thumb = document.createElement("img");
-            thumb.src = imgSrc;
-            thumb.dataset.id = imgId;
-            thumb.title = file.name; // Tooltip shows filename initially
-            thumb.addEventListener("click", () => {
-              if (!analyzing) switchImage(imgId);
-            });
-            gallery.appendChild(thumb);
-
-            // Set this as the current image and show preview
-            currentImageId = imgId;
-            previewImage.src = imgSrc;
-            previewBox.style.display = "block";
-            updateActiveThumbnail();
-            analyzeBtn.disabled = false;
-          };
-          reader.readAsDataURL(file);
-        });
+        handleFiles(Array.from(this.files));
       });
 
       // --- DRAG & DROP MULTI-UPLOAD SUPPORT ---
@@ -205,21 +157,19 @@
             thumb.src = imgSrc;
             thumb.dataset.id = imgId;
             thumb.title = file.name;
-            thumb.addEventListener("click", () => switchImage(imgId));
+            thumb.addEventListener("click", () => {
+              if (!analyzing) switchImage(imgId);
+            });
             gallery.appendChild(thumb);
 
-            // Set this as current image
-            currentImageId = imgId;
-            previewImage.src = imgSrc;
-            previewBox.style.display = "block";
-            updateActiveThumbnail();
-            analyzeBtn.disabled = false;
+            // Select this image
+            switchImage(imgId);
           };
           reader.readAsDataURL(file);
         });
       }
 
-      // Simulate progress bar and analysis
+      // Simulate progress bar and analysis (remove this function when we dont need it anymore)
       function simulateProgress() {
         const bar = document.getElementById("progressBar");
         const label = document.getElementById("progressLabel");
@@ -270,6 +220,7 @@
         previewBox.style.display = "block";
         updateActiveThumbnail();
         removeBtn.disabled = false;
+        analyzeBtn.disabled = false;
 
         // Show that image's results if available
         if (selected.results) {
@@ -302,42 +253,95 @@
         document.getElementById("penIntersections").textContent = "--";
       }
 
-      // Analyze button click
-      analyzeBtn.addEventListener("click", (e) => {
+      // --- REAL ANALYSIS LOGIC ---
+      analyzeBtn.addEventListener("click", async (e) => {
         e.preventDefault();
-        if (!currentImageId || imagesData.length === 0) {
-          errorMsg.textContent =
-            "Please select or upload a file before analyzing.";
-          return;
-        }
 
+        if (!currentImageId) return;
+        const currentImgObj = imagesData.find(
+          (img) => img.id === currentImageId
+        );
+        if (!currentImgObj) return;
+
+        // UI Setup
         errorMsg.textContent = "";
-        simulateProgress();
+        analyzing = true;
+        analyzeBtn.disabled = true;
+        clearBtn.disabled = true;
+        removeBtn.disabled = true;
 
-        // Fill in results after progress finishes
-        setTimeout(() => {
-          const newResults = {
-            score: "78.5",
-            lifts: "3",
-            reversals: "12",
-            intersections: "5",
-          };
+        // Progress Bar: Start
+        const bar = document.getElementById("progressBar");
+        const label = document.getElementById("progressLabel");
+        bar.classList.remove("complete");
+        label.classList.remove("complete");
+        label.textContent = "Uploading & Analyzing...";
+        bar.style.width = "30%"; // Initial jump to show activity
 
-          // Save results to current image
-          const img = imagesData.find((img) => img.id === currentImageId);
-          if (img) img.results = newResults;
+        // Lock Gallery
+        document
+          .querySelectorAll(".gallery img")
+          .forEach((t) => (t.style.pointerEvents = "none"));
 
-          // Update thumbnail tooltip with score
+        try {
+          // Prepare Data
+          const formData = new FormData();
+          formData.append("file", currentImgObj.file);
+
+          // SEND TO PYTHON SERVER
+          // Ensure api.py is running on port 5000!
+          const response = await fetch("http://127.0.0.1:5000/analyze", {
+            method: "POST",
+            body: formData,
+          });
+
+          if (!response.ok) {
+            const errData = await response.json();
+            throw new Error(errData.error || "Server Error");
+          }
+
+          const resultData = await response.json();
+
+          // Progress Bar: Finish
+          bar.style.width = "100%";
+          label.textContent = "Processing Results...";
+
+          // Artificial delay to let user see the bar fill up
+          await new Promise((r) => setTimeout(r, 500));
+
+          bar.classList.add("complete");
+          label.classList.add("complete");
+          label.textContent = "Complete!";
+
+          // Update Data & UI
+          currentImgObj.results = resultData;
+
+          // Update Tooltip with new score
           const thumb = gallery.querySelector(
             `img[data-id='${currentImageId}']`
           );
-          if (thumb) {
-            thumb.title = `${img.file.name} — Score: ${newResults.score}`;
-          }
+          if (thumb)
+            thumb.title = `${currentImgObj.file.name} — Score: ${resultData.score}`;
 
-          displayResults(newResults);
+          displayResults(resultData);
+        } catch (err) {
+          console.error(err);
+          errorMsg.textContent =
+            "Analysis Failed: " +
+            err.message +
+            ". Is the local server running?";
+          bar.style.width = "0%";
+          label.textContent = "";
+        } finally {
+          // Reset UI State
+          analyzing = false;
+          analyzeBtn.disabled = false;
           clearBtn.disabled = false;
-        }, 2200);
+          removeBtn.disabled = false;
+          document
+            .querySelectorAll(".gallery img")
+            .forEach((t) => (t.style.pointerEvents = "auto"));
+        }
       });
 
       // Clear button click
@@ -350,7 +354,6 @@
         progressBar.style.width = "0%";
         progressBar.classList.remove("complete");
         progressLabel.textContent = "";
-        progressLabel.classList.remove("complete");
 
         // Clear results for that image
         if (currentImageId) {
