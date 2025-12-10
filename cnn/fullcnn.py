@@ -82,31 +82,60 @@ def dice_loss(y_true, y_pred, smooth=1e-6):
 def bce_dice(y_true, y_pred):
     return tf.keras.losses.binary_crossentropy(y_true, y_pred) + dice_loss(y_true, y_pred)
 
+#residual block (more advanced version of cnn to improve accuracy)
+def residual_block(x, filters):
+    shortcut = x
+
+    x = layers.Conv2D(filters, 3, padding="same", activation="relu")(x)
+    x = layers.BatchNormalization()(x)
+
+    x = layers.Conv2D(filters, 3, padding="same")(x)
+    x = layers.BatchNormalization()(x)
+
+    # Project shortcut if needed
+    if shortcut.shape[-1] != filters:
+        shortcut = layers.Conv2D(filters, 1, padding="same")(shortcut)
+
+    x = layers.Add()([x, shortcut])
+    x = layers.ReLU()(x)
+    return x
+
+
 #creates the model
-def create_signature_cnn(input_shape=(128,128,1)):
+def create_signature_cnn(input_shape=(128, 128, 1)):
     inputs = layers.Input(shape=input_shape)
 
-    c1 = layers.Conv2D(32, 3, activation='relu', padding='same')(inputs)
+    # ---- Encoder ----
+    c1 = residual_block(inputs, 32)
     p1 = layers.MaxPooling2D()(c1)
 
-    c2 = layers.Conv2D(64, 3, activation='relu', padding='same')(p1)
+    c2 = residual_block(p1, 64)
     p2 = layers.MaxPooling2D()(c2)
 
-    c3 = layers.Conv2D(128, 3, activation='relu', padding='same')(p2)
+    c3 = residual_block(p2, 128)
+    p3 = layers.MaxPooling2D()(c3)
 
-    b = layers.Conv2D(256, 3, activation='relu', padding='same')(c3)
+    # ---- Bottleneck ----
+    b = residual_block(p3, 256)
 
+    # ---- Decoder ----
     u1 = layers.UpSampling2D()(b)
-    u1 = layers.Concatenate()([u1, c2])
-    c4 = layers.Conv2D(128, 3, activation='relu', padding='same')(u1)
+    u1 = layers.Concatenate()([u1, c3])
+    c4 = residual_block(u1, 128)
 
     u2 = layers.UpSampling2D()(c4)
-    u2 = layers.Concatenate()([u2, c1])
-    c5 = layers.Conv2D(64, 3, activation='relu', padding='same')(u2)
+    u2 = layers.Concatenate()([u2, c2])
+    c5 = residual_block(u2, 64)
 
-    outputs = layers.Conv2D(3, 1, activation='sigmoid')(c5)
+    u3 = layers.UpSampling2D()(c5)
+    u3 = layers.Concatenate()([u3, c1])
+    c6 = residual_block(u3, 32)
+
+    # ---- Output ----
+    outputs = layers.Conv2D(3, 1, activation="sigmoid")(c6)
 
     return models.Model(inputs, outputs)
+
 
 
 #load and train the CNN
