@@ -1,8 +1,21 @@
+import os
+#makes server run with only CPU
+os.environ["CUDA_VISIBLE_DEVICES"]="-1"
+#hides warnings from tensorflow
+os.environ["TF_CPP_MIN_LOG_LEVEL"]="3"
+
 from flask import Flask, render_template, url_for, request, jsonify
 from flask_cors import CORS
 import tensorflow as tf
 import numpy as np
 import cv2
+import cv2
+import numpy as np
+
+def count_components(mask):
+    mask_uint8 = (mask > 0.5).astype("uint8")
+    num_labels, _, _, _ = cv2.connectedComponentsWithStats(mask_uint8)
+    return int(num_labels - 1)
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
 CORS(app)
@@ -44,7 +57,6 @@ def index():
     css_= url_for('static', filename='style.css')
     return render_template("index.html", css_path=css_)
 
-#analyze
 @app.route("/analyze", methods=["POST"])
 def analyze():
     try:
@@ -53,26 +65,36 @@ def analyze():
 
         file = request.files["file"]
 
-        #preprocess model
+        #preprocess
         input_tensor = preprocess_image(file)
 
-        #prediction
-        pred = model.predict(input_tensor, verbose=0)[0]
+        #predict segmentation maps
+        pred = model.predict(input_tensor, verbose=0)[0]   # (128, 128, 3)
 
-        curve = float(pred[..., 0])
-        lift = float(pred[..., 1])
-        cross = float(pred[..., 2])
+        #split channels
+        curve_mask = pred[..., 0]
+        lift_mask  = pred[..., 1]
+        cross_mask = pred[..., 2]
 
-        response = {
-            "curve_score": curve,
-            "lift_score": lift,
-            "cross_score": cross
-        }
+        #count connected components
+        curve_count = count_components(curve_mask)
+        lift_count  = count_components(lift_mask)
+        cross_count = count_components(cross_mask)
 
-        return jsonify(response)
+        #final complexity score
+        complexity_score = curve_count + lift_count + cross_count
+
+        return jsonify({
+            "score": int(complexity_score),
+            "lifts": int(lift_count),
+            "reversals": int(curve_count),
+            "intersections": int(cross_count)
+        })
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
 
 #running app
 if __name__ == "__main__":

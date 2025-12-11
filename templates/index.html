@@ -9,16 +9,14 @@
   <body>
     <header>
       <div class="header-left">
-        <img
-          src="../images/CStudiosLogo.png"
-          alt="C Studios Logo"
-          class="logo"
-        />
+        <img src="{{ url_for('static', filename='images/CStudiosLogo.png') }}"
+             alt="C Studios Logo"
+             class="logo">
         <h1>Signature Complexity Analyzer</h1>
       </div>
 
       <a href="https://docs.google.com/document/d/1h8YiLNiSJhIVjDvnaBJdvL4WyET_au8i3qmmuaaB0bM/edit?tab=t.0" target="_blank" class="help-button">
-        <img src="../images/Help.png" alt="Help" />
+        <img src="{{ url_for('static', filename='images/Help.png') }}" alt="Help">
       </a>
     </header>
     <main class="main-layout">
