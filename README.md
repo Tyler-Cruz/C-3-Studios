@@ -13,3 +13,5 @@ Poster - https://docs.google.com/presentation/d/1oix9FBmtYtAmKcv__2eZgW2T6lP0fB4
 User Manual - https://docs.google.com/document/d/1h8YiLNiSJhIVjDvnaBJdvL4WyET_au8i3qmmuaaB0bM/edit?tab=t.0
 
 Technical Specifications - https://docs.google.com/document/d/1xJYdwO6yxRyahg8iSUWvUFggER1BZQ2zidTq4fViEpk/edit?tab=t.0
+
+Slides - https://docs.google.com/presentation/d/1QIwVMfCHvNK2K-enFddu-GE0DJTxVcu-ejgXIhiihjA/edit?slide=id.p#slide=id.p

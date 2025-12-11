@@ -290,7 +290,7 @@
 
           // SEND TO PYTHON SERVER
           // Ensure api.py is running on port 5000!
-          const response = await fetch("http://127.0.0.1:5000/analyze", {
+          const response = await fetch("/analyze", {
             method: "POST",
             body: formData,
           });
