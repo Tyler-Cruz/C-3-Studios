@@ -14,7 +14,7 @@ from sklearn.model_selection import train_test_split
 import pandas as pd
 
 #preprocess teh data
-def create_binary_mask(image_path, target_size=(128, 128)):
+def create_binary_mask(image_path, target_size=(256, 256)):
     img = cv2.imread(image_path)
     img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     img = cv2.resize(img, target_size)
@@ -28,7 +28,7 @@ def create_binary_mask(image_path, target_size=(128, 128)):
 
 #loading sig dataset
 def load_signature_dataset(image_dir, curve_dir, lift_dir, cross_dir,
-                           target_size=(128,128), test_size=0.1, val_size=0.1):
+                           target_size=(256,256), test_size=0.1, val_size=0.1):
 
     image_files = sorted(os.listdir(image_dir))
     X, Y, names = [], [], []
@@ -102,7 +102,7 @@ def residual_block(x, filters):
 
 
 #creates the model
-def create_signature_cnn(input_shape=(128, 128, 1)):
+def create_signature_cnn(input_shape=(256, 256, 1)):
     inputs = layers.Input(shape=input_shape)
 
     # ---- Encoder ----
@@ -112,7 +112,7 @@ def create_signature_cnn(input_shape=(128, 128, 1)):
     c2 = residual_block(p1, 64)
     p2 = layers.MaxPooling2D()(c2)
 
-    c3 = residual_block(p2, 128)
+    c3 = residual_block(p2, 256)
     p3 = layers.MaxPooling2D()(c3)
 
     # ---- Bottleneck ----
@@ -121,7 +121,7 @@ def create_signature_cnn(input_shape=(128, 128, 1)):
     # ---- Decoder ----
     u1 = layers.UpSampling2D()(b)
     u1 = layers.Concatenate()([u1, c3])
-    c4 = residual_block(u1, 128)
+    c4 = residual_block(u1, 256)
 
     u2 = layers.UpSampling2D()(c4)
     u2 = layers.Concatenate()([u2, c2])
