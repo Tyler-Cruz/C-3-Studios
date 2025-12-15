@@ -1,8 +1,4 @@
-# =============================================
-# FINAL, KNOWN-GOOD TRAINING SCRIPT
-# Pen Curves / Lifts / Intersections Segmentation
-# =============================================
-
+#proper imports and ignoring warnings
 import os
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 os.environ["TF_ENABLE_ONEDNN_OPTS"] = "1"
@@ -10,22 +6,20 @@ os.environ["TF_FORCE_GPU_ALLOW_GROWTH"] = "true"
 
 import tensorflow as tf
 from tensorflow.keras import layers, models, backend as K
+from tensorflow.keras.optimizers import Adam
 import numpy as np
 import cv2
 from tensorflow.keras.preprocessing.image import load_img, img_to_array
 from sklearn.model_selection import train_test_split
 import matplotlib.pyplot as plt
 
-# -------------------------------------------------
-# DATA LOADING (MASK-SAFE)
-# -------------------------------------------------
-
+#makes mask to train the data on
 def load_mask(path, target_size=(128,128)):
     img = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
     img = cv2.resize(img, target_size, interpolation=cv2.INTER_NEAREST)
     return (img > 127).astype(np.float32)[..., np.newaxis]
 
-
+#loads the dataset
 def load_dataset(image_dir, curve_dir, lift_dir, cross_dir,
                  target_size=(128,128)):
     X, Y = [], []
@@ -58,61 +52,49 @@ def load_dataset(image_dir, curve_dir, lift_dir, cross_dir,
 
     return X_train, X_val, X_test, Y_train, Y_val, Y_test
 
-# -------------------------------------------------
-# LOSSES (ANTI-COLLAPSE)
-# -------------------------------------------------
 
+#helps train the data correctly by removing uneeded parts of it
 def dice_loss(y_true, y_pred, smooth=1e-6):
     yt = K.flatten(y_true)
     yp = K.flatten(y_pred)
     inter = K.sum(yt * yp)
     return 1 - (2 * inter + smooth) / (K.sum(yt) + K.sum(yp) + smooth)
 
-
+#more help with loss training
 def weighted_bce(y_true, y_pred, pos_weight):
-    """
-    y_true, y_pred: (B, H, W)
-    Use backend BCE to avoid unintended axis reduction
-    """
-    y_pred = tf.clip_by_value(y_pred, 1e-4, 1.0 - 1e-4)
-
-    # Elementwise BCE: (B, H, W)
-    bce = K.binary_crossentropy(y_true, y_pred)
-
-    # Pixel-wise weighting: (B, H, W)
+    bce = tf.nn.sigmoid_cross_entropy_with_logits(labels=y_true, logits=y_pred)
     weight = y_true * pos_weight + (1.0 - y_true)
-
     return tf.reduce_mean(weight * bce)
 
+#mode loss functions
+def dice_bce(y_true, y_pred, w=1.0):
+    d = dice_loss(y_true, y_pred)
+    b = tf.keras.losses.binary_crossentropy(y_true, y_pred)
+    return d + w * tf.reduce_mean(b)
 
+#weights parts of the signatures so it is more accurate
 def multi_channel_loss(y_true, y_pred):
-    # Reduced, stabilizing positive weights
-    curve = dice_loss(y_true[...,0], y_pred[...,0]) + weighted_bce(y_true[...,0], y_pred[...,0], 8.0)
-    lift  = dice_loss(y_true[...,1], y_pred[...,1]) + weighted_bce(y_true[...,1], y_pred[...,1], 4.0)
-    cross = dice_loss(y_true[...,2], y_pred[...,2]) + weighted_bce(y_true[...,2], y_pred[...,2], 6.0)
+    curve = dice_bce(y_true[...,0], y_pred[...,0], w=2.0)
+    lift  = dice_bce(y_true[...,1], y_pred[...,1], w=1.5)
+    cross = dice_bce(y_true[...,2], y_pred[...,2], w=2.0)
     return curve + lift + cross
 
-# -------------------------------------------------
-# METRICS
-# -------------------------------------------------
-
+#helps know what a curve is so it does not go away
 def curve_recall(y_true, y_pred):
+    # Soft recall (no rounding) to avoid saturation
     yt = K.flatten(y_true[...,0])
-    yp = K.flatten(K.round(y_pred[...,0]))
+    yp = K.flatten(y_pred[...,0])
     tp = K.sum(yt * yp)
     fn = K.sum(yt * (1 - yp))
     return tp / (tp + fn + K.epsilon())
 
-# -------------------------------------------------
-# MODEL (BASELINE U-NET)
-# -------------------------------------------------
-
+#starts making the model
 def conv_block(x, f):
     x = layers.Conv2D(f, 3, padding='same', activation='relu')(x)
     x = layers.Conv2D(f, 3, padding='same', activation='relu')(x)
     return x
 
-
+#builds the unet
 def build_unet(input_shape=(128,128,1)):
     inp = layers.Input(shape=input_shape)
 
@@ -139,17 +121,16 @@ def build_unet(input_shape=(128,128,1)):
     u3 = layers.Concatenate()([u3, c1])
     c7 = conv_block(u3, 32)
 
-    out = layers.Conv2D(
-        3, 1, activation='sigmoid',
-        bias_initializer=tf.keras.initializers.Constant(-2.0)
-    )(c7)
+            # Output heads (sigmoid for stability)
+    curve_out = layers.Conv2D(1, 1, activation="sigmoid", name="curve")(c7)
+    lift_out  = layers.Conv2D(1, 1, activation="sigmoid", name="lift")(c7)
+    cross_out = layers.Conv2D(1, 1, activation="sigmoid", name="cross")(c7)
+
+    out = layers.Concatenate()([curve_out, lift_out, cross_out])
 
     return models.Model(inp, out)
 
-# -------------------------------------------------
-# TRAINING
-# -------------------------------------------------
-
+#starts training and loads the dataset
 image_dir = "Data/Padded_Raw"
 curve_dir = "Data/Padded_Curve"
 lift_dir  = "Data/Padded_Lift"
@@ -161,7 +142,10 @@ X_train, X_val, X_test, Y_train, Y_val, Y_test = load_dataset(
 
 model = build_unet()
 model.compile(
-    optimizer=tf.keras.optimizers.Adam(3e-5),
+    optimizer=Adam(
+        learning_rate=1e-4,
+        clipnorm=1.0
+    ),
     loss=multi_channel_loss,
     metrics=[curve_recall]
 )
@@ -169,43 +153,65 @@ model.compile(
 model.fit(
     X_train, Y_train,
     validation_data=(X_val, Y_val),
-    epochs=60,
+    epochs=5,
     batch_size=8
 )
 
-# -------------------------------------------------
-# DEBUG VISUALIZATION
-# -------------------------------------------------
 
+#model is trained by this point, helps debug and make sure everything is good in the model
 idx = np.random.randint(len(X_val))
 img = X_val[idx]
 true = Y_val[idx]
 pred = model.predict(img[np.newaxis])[0]
 
+#convert to numpy
+curve_p = pred[..., 0]
+lift_p  = pred[..., 1]
+cross_p = pred[..., 2]
+
+print(
+    "Curve pred min/max/mean:",
+    curve_p.min(),
+    curve_p.max(),
+    curve_p.mean()
+)
+
+print(
+    "Lift  pred min/max/mean:",
+    lift_p.min(),
+    lift_p.max(),
+    lift_p.mean()
+)
+
+print(
+    "Cross pred min/max/mean:",
+    cross_p.min(),
+    cross_p.max(),
+    cross_p.mean()
+)
+
+
 fig, axs = plt.subplots(3, 4, figsize=(12, 9))
 
 axs[0,0].imshow(img.squeeze(), cmap='gray'); axs[0,0].set_title('Input')
 axs[0,1].imshow(true[...,0], cmap='gray'); axs[0,1].set_title('GT Curve')
-axs[0,2].imshow(pred[...,0], cmap='gray', vmin=0, vmax=1); axs[0,2].set_title('Pred Curve (raw)')
-axs[0,3].imshow(pred[...,0] > 0.3, cmap='gray'); axs[0,3].set_title('Pred Curve (thr)')
+axs[0,2].imshow(tf.sigmoid(pred[...,0]), cmap='gray'); axs[0,2].set_title('Pred Curve (raw)')
+axs[0,3].imshow(tf.sigmoid(pred[...,0]) > 0.3, cmap='gray'); axs[0,3].set_title('Pred Curve (thr)')
 
 axs[1,0].imshow(true[...,1], cmap='gray'); axs[1,0].set_title('GT Lift')
-axs[1,1].imshow(pred[...,1], cmap='gray', vmin=0, vmax=1); axs[1,1].set_title('Pred Lift (raw)')
-axs[1,2].imshow(pred[...,1] > 0.3, cmap='gray'); axs[1,2].set_title('Pred Lift (thr)')
+axs[1,1].imshow(tf.sigmoid(pred[...,1]), cmap='gray'); axs[1,1].set_title('Pred Lift (raw)')
+axs[1,2].imshow(tf.sigmoid(pred[...,1]) > 0.3, cmap='gray'); axs[1,2].set_title('Pred Lift (thr)')
 axs[1,3].axis('off')
 
 axs[2,0].imshow(true[...,2], cmap='gray'); axs[2,0].set_title('GT Cross')
-axs[2,1].imshow(pred[...,2], cmap='gray', vmin=0, vmax=1); axs[2,1].set_title('Pred Cross (raw)')
-axs[2,2].imshow(pred[...,2] > 0.3, cmap='gray'); axs[2,2].set_title('Pred Cross (thr)')
+axs[2,1].imshow(tf.sigmoid(pred[...,2]), cmap='gray'); axs[2,1].set_title('Pred Cross (raw)')
+axs[2,2].imshow(tf.sigmoid(pred[...,2]) > 0.3, cmap='gray'); axs[2,2].set_title('Pred Cross (thr)')
 axs[2,3].axis('off')
 
 for ax in axs.flatten(): ax.axis('off')
 plt.tight_layout(); plt.show()
 
-# -------------------------------------------------
-# SAVE MODEL
-# -------------------------------------------------
-
+#saves the models
 os.makedirs("saved_model", exist_ok=True)
 model.save("saved_model/pen_unet.keras")
 print("Model saved successfully")
