@@ -24,8 +24,8 @@ def create_mask_from_specific_red(filename):
     
     # Lower Red Range (0-15)
     # Hue: 0-15
-    # Saturation: 140-255
-    # Value: 100-255
+    # Saturation: 120-255
+    # Value: 70-255
     lower_red1 = np.array([0, 120, 70])
     upper_red1 = np.array([15, 255, 255])
     
