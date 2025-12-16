@@ -52,40 +52,39 @@ def load_dataset(image_dir, curve_dir, lift_dir, cross_dir,
 
     return X_train, X_val, X_test, Y_train, Y_val, Y_test
 
-
-#helps train the data correctly by removing uneeded parts of it
+# Dice loss for sparse masks
 def dice_loss(y_true, y_pred, smooth=1e-6):
-    yt = K.flatten(y_true)
-    yp = K.flatten(y_pred)
-    inter = K.sum(yt * yp)
-    return 1 - (2 * inter + smooth) / (K.sum(yt) + K.sum(yp) + smooth)
+    y_true_f = K.flatten(y_true)
+    y_pred_f = K.flatten(y_pred)
+    intersection = K.sum(y_true_f * y_pred_f)
+    return 1 - (2 * intersection + smooth) / (K.sum(y_true_f) + K.sum(y_pred_f) + smooth)
 
-#more help with loss training
-def weighted_bce(y_true, y_pred, pos_weight):
-    bce = tf.nn.sigmoid_cross_entropy_with_logits(labels=y_true, logits=y_pred)
-    weight = y_true * pos_weight + (1.0 - y_true)
-    return tf.reduce_mean(weight * bce)
+# Standard BCE for sigmoid outputs
+def bce_loss(y_true, y_pred):
+    return tf.reduce_mean(tf.keras.losses.binary_crossentropy(y_true, y_pred))
 
-#mode loss functions
-def dice_bce(y_true, y_pred, w=1.0):
-    d = dice_loss(y_true, y_pred)
-    b = tf.keras.losses.binary_crossentropy(y_true, y_pred)
-    return d + w * tf.reduce_mean(b)
+# Combine dice + BCE (weighted if desired)
+def dice_bce_loss(y_true, y_pred, dice_weight=1.0, bce_weight=1.0):
+    return dice_weight * dice_loss(y_true, y_pred) + bce_weight * bce_loss(y_true, y_pred)
 
-#weights parts of the signatures so it is more accurate
+# Multi-channel loss for curve, lift, cross
 def multi_channel_loss(y_true, y_pred):
-    curve = dice_bce(y_true[...,0], y_pred[...,0], w=2.0)
-    lift  = dice_bce(y_true[...,1], y_pred[...,1], w=1.5)
-    cross = dice_bce(y_true[...,2], y_pred[...,2], w=2.0)
-    return curve + lift + cross
+    # Curve: mostly sparse → BCE works well
+    curve_loss = bce_loss(y_true[...,0], y_pred[...,0])
+    # Lift: more structured → dice + BCE
+    lift_loss = dice_bce_loss(y_true[...,1], y_pred[...,1], dice_weight=1.0, bce_weight=1.0)
+    # Cross: also dice + BCE
+    cross_loss = dice_bce_loss(y_true[...,2], y_pred[...,2], dice_weight=1.0, bce_weight=1.0)
+    
+    return curve_loss + lift_loss + cross_loss
 
-#helps know what a curve is so it does not go away
+# Metrics: recall for curve to monitor training
 def curve_recall(y_true, y_pred):
-    # Soft recall (no rounding) to avoid saturation
-    yt = K.flatten(y_true[...,0])
-    yp = K.flatten(y_pred[...,0])
-    tp = K.sum(yt * yp)
-    fn = K.sum(yt * (1 - yp))
+    y_true_f = K.flatten(y_true[...,0])
+    y_pred_f = K.flatten(y_pred[...,0])
+    y_pred_bin = K.cast(y_pred_f > 0.3, K.floatx())  # threshold for counting
+    tp = K.sum(y_true_f * y_pred_bin)
+    fn = K.sum(y_true_f * (1 - y_pred_bin))
     return tp / (tp + fn + K.epsilon())
 
 #starts making the model
@@ -98,28 +97,28 @@ def conv_block(x, f):
 def build_unet(input_shape=(128,128,1)):
     inp = layers.Input(shape=input_shape)
 
-    c1 = conv_block(inp, 32)
+    c1 = conv_block(inp, 16)
     p1 = layers.MaxPooling2D()(c1)
 
-    c2 = conv_block(p1, 64)
+    c2 = conv_block(p1, 32)
     p2 = layers.MaxPooling2D()(c2)
 
-    c3 = conv_block(p2, 128)
+    c3 = conv_block(p2, 64)
     p3 = layers.MaxPooling2D()(c3)
 
-    c4 = conv_block(p3, 256)
+    c4 = conv_block(p3, 128)
 
     u1 = layers.UpSampling2D()(c4)
     u1 = layers.Concatenate()([u1, c3])
-    c5 = conv_block(u1, 128)
+    c5 = conv_block(u1, 64)
 
     u2 = layers.UpSampling2D()(c5)
     u2 = layers.Concatenate()([u2, c2])
-    c6 = conv_block(u2, 64)
+    c6 = conv_block(u2, 32)
 
     u3 = layers.UpSampling2D()(c6)
     u3 = layers.Concatenate()([u3, c1])
-    c7 = conv_block(u3, 32)
+    c7 = conv_block(u3, 16)
 
             # Output heads (sigmoid for stability)
     curve_out = layers.Conv2D(1, 1, activation="sigmoid", name="curve")(c7)
@@ -213,5 +212,5 @@ plt.tight_layout(); plt.show()
 
 #saves the models
 os.makedirs("saved_model", exist_ok=True)
-model.save("saved_model/pen_unet.keras")
+model.save("saved_model/model.keras")
 print("Model saved successfully")
