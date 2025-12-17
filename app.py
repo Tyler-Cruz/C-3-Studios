@@ -24,6 +24,7 @@ CORS(app)
 MODEL_PATH = "saved_model/model.keras"
 model = tf.keras.models.load_model(MODEL_PATH, compile=False)
 print("Model loaded successfully.")
+print(model.output_shape)
 
 #preprocess images
 def preprocess_image(file, target_size=(128,128)):
@@ -65,23 +66,23 @@ def analyze():
 
         file = request.files["file"]
 
-        #preprocess
+        # preprocess
         input_tensor = preprocess_image(file)
+        # Get the prediction list (e.g., [curve_output, lift_output, cross_output])
+        predictions = model.predict(input_tensor, verbose=0)
+        
+        # Assume the order is: 0=curve, 1=lift, 2=cross. 
+        #get single mask (128, 128) from each output (1, 128, 128, 1)
+        curve_mask = predictions[0][0, ..., 0]  
+        lift_mask  = predictions[1][0, ..., 0]  
+        cross_mask = predictions[2][0, ..., 0]  
 
-        #predict segmentation maps
-        pred = model.predict(input_tensor, verbose=0)[0]   # (128, 128, 3)
-
-        #split channels
-        curve_mask = pred[..., 0]
-        lift_mask  = pred[..., 1]
-        cross_mask = pred[..., 2]
-
-        #count connected components
+        # count connected components
         curve_count = count_components(curve_mask)
         lift_count  = count_components(lift_mask)
         cross_count = count_components(cross_mask)
 
-        #final complexity score
+        # final complexity score
         complexity_score = curve_count + lift_count + cross_count
 
         return jsonify({
