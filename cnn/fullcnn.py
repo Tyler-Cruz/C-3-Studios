@@ -10,7 +10,7 @@ from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.utils import Sequence
 import numpy as np
 import cv2
-import pandas as pd  # <-- Added pandas for CSV handling
+import pandas as pd
 from tensorflow.keras.preprocessing.image import load_img, img_to_array
 from sklearn.model_selection import train_test_split
 import matplotlib.pyplot as plt
@@ -26,7 +26,7 @@ def load_dataset_multi_output(image_dir, csv_path, target_size=(128,128)):
     except FileNotFoundError:
         raise ValueError(f"CSV file not found at {csv_path}")
 
-    # Ensure column names match user requirements (strip whitespace just in case)
+    # Ensure column names match user requirements
     df.columns = [c.strip() for c in df.columns]
     required_cols = ['Image name', 'Curve Value', 'Cross Value', 'Lift value']
     if not all(col in df.columns for col in required_cols):
@@ -37,23 +37,19 @@ def load_dataset_multi_output(image_dir, csv_path, target_size=(128,128)):
     
     files = sorted(os.listdir(image_dir))
 
-    # Load targets (list of measured values)
+    # Load targets
     for f in files:
         img_path = os.path.join(image_dir, f)
 
-        # Check if file exists and if it is in our CSV data
         if not os.path.exists(img_path):
             continue
         
-        # logic to handle if CSV names include extension or not
-        # We try exact match first
         csv_key = f
         if csv_key not in data_map:
-             # try removing extension if exact match failed
              csv_key = os.path.splitext(f)[0]
         
         if csv_key not in data_map:
-            continue # Skip images not found in CSV
+            continue 
 
         # Load Image
         img = load_img(img_path, color_mode='grayscale', target_size=target_size)
@@ -75,7 +71,7 @@ def load_dataset_multi_output(image_dir, csv_path, target_size=(128,128)):
     if len(X) == 0:
         raise ValueError("No matched images found. Check directory paths and CSV filenames.")
 
-    # Splits logic for x and all three y
+    # Splits logic
     (X_train, X_tmp, 
      Y_curve_train, Y_curve_tmp, 
      Y_lift_train, Y_lift_tmp, 
@@ -97,11 +93,9 @@ def load_dataset_multi_output(image_dir, csv_path, target_size=(128,128)):
     return X_train, X_val, X_test, Y_train_list, Y_val_list, Y_test_list
 
 
-# Updated Generator for Regression (Scalar targets don't need spatial augmentation)
 class RegressionDataGenerator(Sequence):
     def __init__(self, x_set, y_set, batch_size, augment=True):
         self.x = x_set
-        # y_set is a list: [Y_curve, Y_lift, Y_cross]
         self.y_curve, self.y_lift, self.y_cross = y_set[0], y_set[1], y_set[2] 
         self.batch_size = batch_size
         self.augment = augment
@@ -115,19 +109,15 @@ class RegressionDataGenerator(Sequence):
         np.random.shuffle(self.indices)
 
     def __getitem__(self, index):
-        # Gets batch index
         batch_indices = self.indices[index * self.batch_size:(index + 1) * self.batch_size]
         
-        # Loads the batches
         X_batch = self.x[batch_indices]
         Yc_batch = self.y_curve[batch_indices]
         Yl_batch = self.y_lift[batch_indices]
         Yx_batch = self.y_cross[batch_indices]
 
-        # Augments and returns
         if self.augment:
             X_aug = self._data_augmentation(X_batch)
-            # Targets do not change with rotation/flip in this context
             return X_aug, (Yc_batch, Yl_batch, Yx_batch) 
         
         return X_batch, (Yc_batch, Yl_batch, Yx_batch)
@@ -137,12 +127,10 @@ class RegressionDataGenerator(Sequence):
         for i in range(X_batch.shape[0]):
             img = X_batch[i]
             
-            # Rotation
             angle = np.random.uniform(-5, 5)
             M = cv2.getRotationMatrix2D((64, 64), angle, 1) 
             img_rot = cv2.warpAffine(img, M, (128, 128), flags=cv2.INTER_CUBIC)[..., np.newaxis]
             
-            # Random horizontal flip
             if np.random.rand() < 0.5:
                 img_rot = np.fliplr(img_rot)
             
@@ -150,9 +138,7 @@ class RegressionDataGenerator(Sequence):
             
         return np.asarray(X_aug, np.float32)
 
-# -------------------------------------------------
-# MODEL (MULTI-OUTPUT REGRESSION)
-# -------------------------------------------------
+#model creation
 def residual_block(input_tensor, filters):
     shortcut = input_tensor
     if K.int_shape(shortcut)[-1] != filters:
@@ -171,7 +157,6 @@ def residual_block(input_tensor, filters):
     return x
 
 def build_resnet_regression(input_shape=(128,128,1)):
-
     inp = layers.Input(shape=input_shape)
 
     # Encoder path
@@ -190,31 +175,64 @@ def build_resnet_regression(input_shape=(128,128,1)):
     # Bottleneck
     c4 = residual_block(p3, 128) 
     
-    # Global Pooling (Flattening the spatial dimensions)
+    # Global Pooling
     x = layers.GlobalAveragePooling2D()(c4)
     x = layers.Dropout(0.4)(x)
 
-    # Output heads (Dense layers for scalar prediction)
-    # Curve Branch
+    # Output heads
     dense_c = layers.Dense(64, activation='relu')(x)
     curve_out = layers.Dense(1, activation='linear', name="curve_output")(dense_c)
     
-    # Lift Branch
     dense_l = layers.Dense(64, activation='relu')(x)
     lift_out = layers.Dense(1, activation='linear', name="lift_output")(dense_l)
 
-    # Cross Branch
     dense_x = layers.Dense(64, activation='relu')(x)
     cross_out = layers.Dense(1, activation='linear', name="cross_output")(dense_x)
 
     return models.Model(inp, [curve_out, lift_out, cross_out])
 
-# Training setup
+#generates dataframe
+def generate_result_dataframe(model, X_data, Y_list, set_name="Dataset"):
+    print(f"Generating results for {set_name}...")
+    
+    # Get predictions
+    preds = model.predict(X_data, verbose=0)
+    pred_curve = preds[0]
+    pred_lift = preds[1]
+    pred_cross = preds[2]
+
+    # Get true values
+    true_curve = Y_list[0]
+    true_lift = Y_list[1]
+    true_cross = Y_list[2]
+
+    # Build list of dicts
+    rows = []
+    for i in range(len(X_data)):
+        tc, pc = float(true_curve[i][0]), float(pred_curve[i][0])
+        tl, pl = float(true_lift[i][0]), float(pred_lift[i][0])
+        tx, px = float(true_cross[i][0]), float(pred_cross[i][0])
+        
+        rows.append({
+            "Set_Type": set_name,
+            "Image_Index": i,
+            "True_Curve": round(tc, 4),
+            "Pred_Curve": round(pc, 4),
+            "Diff_Curve": round(abs(tc-pc), 4),
+            "True_Lift": round(tl, 4),
+            "Pred_Lift": round(pl, 4),
+            "Diff_Lift": round(abs(tl-pl), 4),
+            "True_Cross": round(tx, 4),
+            "Pred_Cross": round(px, 4),
+            "Diff_Cross": round(abs(tx-px), 4)
+        })
+        
+    return pd.DataFrame(rows)
+
+#loading the datasets
 image_dir = "Data/Padded_Raw"
 csv_path = "Data/data_values.csv" 
 BATCH_SIZE = 8
-
-# Load data
 
 try:
     X_train, X_val, X_test, Y_train_list, Y_val_list, Y_test_list = load_dataset_multi_output(
@@ -227,7 +245,6 @@ try:
 
     model = build_resnet_regression()
 
-    # Define scheduler callback
     lr_scheduler = ReduceLROnPlateau(
         monitor='val_loss', 
         factor=0.5,       
@@ -236,7 +253,6 @@ try:
         verbose=1
     )
 
-# Compile with MSE loss for regression
     model.compile(
         optimizer=Adam(learning_rate=3e-4, clipnorm=1.0),
         loss={
@@ -249,67 +265,51 @@ try:
             "lift_output": 1.0,
             "cross_output": 1.0
         },
-        # Map the 'mae' metric to each specific output name
         metrics={
             "curve_output": "mae",
             "lift_output": "mae",
             "cross_output": "mae"
         }
-
     )
 
     print("Starting FINAL training (Regression ResNet + LR Scheduler)...")
-    model.fit(
+    history = model.fit(
         train_gen,
         validation_data=val_gen,
         epochs=100, 
         callbacks=[lr_scheduler]
     )
 
-    # Visualization of Regression Results
-    idx = np.random.randint(len(X_val))
-    img = X_test[idx]
+    #save results to csv
+    df_train = generate_result_dataframe(model, X_train, Y_train_list, set_name="Training")
+    df_val   = generate_result_dataframe(model, X_val, Y_val_list, set_name="Validation")
+    df_test  = generate_result_dataframe(model, X_test, Y_test_list, set_name="Test")
 
-    # Prediction
-    pred_list = model.predict(img[np.newaxis])
-    pred_curve = pred_list[0][0][0]
-    pred_lift = pred_list[1][0][0]
-    pred_cross = pred_list[2][0][0]
-
-    # True Values
-    true_curve = Y_test_list[0][idx][0]
-    true_lift = Y_test_list[1][idx][0]
-    true_cross = Y_test_list[2][idx][0]
-
-    print(f"\n--- Analysis for Image {idx} ---")
-    print(f"{'Feature':<10} | {'True':<10} | {'Pred':<10} | {'Diff':<10}")
-    print("-" * 46)
-    print(f"{'Curve':<10} | {true_curve:<10.2f} | {pred_curve:<10.2f} | {abs(true_curve-pred_curve):<10.2f}")
-    print(f"{'Lift':<10} | {true_lift:<10.2f} | {pred_lift:<10.2f} | {abs(true_lift-pred_lift):<10.2f}")
-    print(f"{'Cross':<10} | {true_cross:<10.2f} | {pred_cross:<10.2f} | {abs(true_cross-pred_cross):<10.2f}")
-
-    plt.figure(figsize=(6, 6))
-    plt.imshow(img.squeeze(), cmap='gray')
-    plt.title(f"Input Image\nTrue: C={true_curve:.1f}, L={true_lift:.1f}, X={true_cross:.1f}\nPred: C={pred_curve:.1f}, L={pred_lift:.1f}, X={pred_cross:.1f}")
-    plt.axis('off')
-    plt.show()
+    # Combine all
+    final_df = pd.concat([df_train, df_val, df_test], ignore_index=True)
+    
+    # Save
+    csv_filename = "results_comparison.csv"
+    final_df.to_csv(csv_filename, index=False)
+    print(f"\nResults successfully saved to {csv_filename}")
 
     # Save model
     os.makedirs("saved_model", exist_ok=True)
     model.save("saved_model/regression_model.keras")
     print("Model saved successfully")
+    
+    #visual check on one random test image
+    idx = np.random.randint(len(X_test))
+    img = X_test[idx]
+    preds = model.predict(img[np.newaxis], verbose=0)
+    
+    plt.figure(figsize=(6, 6))
+    plt.imshow(img.squeeze(), cmap='gray')
+    plt.title(f"Test Image {idx}\nCurve: T={Y_test_list[0][idx][0]:.1f}, P={preds[0][0][0]:.1f}")
+    plt.axis('off')
+    plt.show()
 
 except ValueError as e:
     print(f"Error loading data: {e}")
 except Exception as e:
     print(f"An unexpected error occurred: {e}")
-
-#loop through all sets (test, val, training)
-#get id for each image
-    #get true and pred for each image
-#for monday
-
-#k fold validation =5
-#see how it goes if ambitious
-
-#be able to graph it later (dr sheets)
